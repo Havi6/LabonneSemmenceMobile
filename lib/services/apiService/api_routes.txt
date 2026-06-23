@@ -1,0 +1,64 @@
+Routes de l'API backend définies dans src/Backend/index.ts
+
+Health check
+  GET /health
+
+Auth
+  POST   /api/auth/register
+  POST   /api/auth/login
+  POST   /api/auth/refresh
+  POST   /api/auth/heartbeat
+  POST   /api/auth/logout
+  GET    /api/auth/me
+  PATCH  /api/auth/password
+
+Users
+  GET    /api/users            (admin)
+  POST   /api/users            (admin)
+  GET    /api/users/:id
+  PUT    /api/users/:id
+  DELETE /api/users/:id
+
+Posts
+  GET    /api/posts
+  GET    /api/posts/admin
+  POST   /api/posts
+  GET    /api/posts/:slug
+  PUT    /api/posts/:id
+  DELETE /api/posts/:id
+  PATCH  /api/posts/:id/publish
+  PATCH  /api/posts/:id/unpublish
+
+Sermons
+  GET    /api/sermons
+  POST   /api/sermons          (admin)
+  PUT    /api/sermons/:id      (admin)
+  DELETE /api/sermons/:id      (admin)
+
+Events
+  GET    /api/events
+  POST   /api/events           (admin)
+  PUT    /api/events/:id       (admin)
+  DELETE /api/events/:id       (admin)
+
+Contacts
+  POST   /api/contacts
+  GET    /api/contacts         (admin)
+  DELETE /api/contacts/:id     (admin)
+
+Donations
+  GET    /api/donations/monetbil/config
+  POST   /api/donations
+  POST   /api/donations/monetbil/notify
+  GET    /api/donations        (admin)
+  PATCH  /api/donations/:id/status (admin)
+
+Files
+  GET    /api/files
+  POST   /api/files/upload
+  POST   /api/files/upload-multiple
+  GET    /api/files/:id/info
+  GET    /api/files/:id/download
+  GET    /api/files/:id/stream
+  PATCH  /api/files/:id/visibility
+  DELETE /api/files/:id
