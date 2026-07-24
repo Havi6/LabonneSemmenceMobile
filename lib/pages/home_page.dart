@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:la_bonne_semence_mobile/theme/app_colors.dart';
 import 'package:la_bonne_semence_mobile/widget/reveal_item.dart';
 import 'package:la_bonne_semence_mobile/widget/image_viewer.dart';
+import 'package:la_bonne_semence_mobile/widget/empty_state_placeholder.dart';
 import 'package:la_bonne_semence_mobile/pages/event_detail_page.dart';
 import 'package:la_bonne_semence_mobile/pages/sermon_player_page.dart';
 import 'package:la_bonne_semence_mobile/services/app_data.dart';
+import 'package:la_bonne_semence_mobile/services/responsive_utils.dart';
 
 class HomePage extends StatefulWidget {
   final Function(int)? onNavigate;
@@ -16,9 +18,9 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  List<Sermon> _recentSermons = AppData.sermons.take(5).toList();
-  List<Event> _recentEvents = AppData.events.take(5).toList();
-  List<GalleryItem> _recentGallery = AppData.gallery.take(5).toList();
+  List<Sermon> _recentSermons = const [];
+  List<Event> _recentEvents = const [];
+  List<GalleryItem> _recentGallery = const [];
   bool _isLoading = true;
 
   @override
@@ -74,7 +76,11 @@ class _HomePageState extends State<HomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildSectionHeader("Derniers Enseignements", Icons.mic_external_on, 1),
+                  _buildSectionHeader(
+                    "Derniers Enseignements",
+                    Icons.mic_external_on,
+                    1,
+                  ),
                   _buildSermonsCarousel(isDark),
                 ],
               ),
@@ -108,7 +114,7 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
 
-            const SizedBox(height: 120), // Espace pour la bottom bar
+            SizedBox(height: context.bottomNavigationClearance),
           ],
         ),
       ),
@@ -117,26 +123,32 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildSectionHeader(String title, IconData icon, int targetIndex) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      padding: EdgeInsets.symmetric(
+        horizontal: context.pageHorizontalPadding,
+        vertical: 8,
+      ),
       child: Row(
         children: [
           Icon(icon, color: AppColors.primary, size: 20),
           const SizedBox(width: 8),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ),
-          const Spacer(),
           TextButton(
             onPressed: () {
               if (widget.onNavigate != null) {
                 widget.onNavigate!(targetIndex);
               }
             },
-            child: const Text("Voir tout", style: TextStyle(color: AppColors.primary)),
+            child: const Text(
+              "Voir tout",
+              style: TextStyle(color: AppColors.primary),
+            ),
           ),
         ],
       ),
@@ -145,8 +157,14 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildSermonsCarousel(bool isDark) {
     return SizedBox(
-      height: 160,
-      child: ListView.builder(
+      height: context.responsiveValue(mobile: 156.0, tablet: 170.0),
+      child: _recentSermons.isEmpty
+          ? const EmptyStatePlaceholder(
+              icon: Icons.mic_off_outlined,
+              message: 'Aucun sermon disponible pour le moment.',
+              compact: true,
+            )
+          : ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: _recentSermons.length,
@@ -162,11 +180,17 @@ class _HomePageState extends State<HomePage> {
               );
             },
             child: Container(
-              width: 280,
+              width: context.responsiveValue(
+                mobile: context.percentWidth(78).clamp(230.0, 320.0),
+                tablet: 300,
+                desktop: 350,
+              ),
               margin: const EdgeInsets.symmetric(horizontal: 8),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: isDark ? AppColors.surfaceLight.withOpacity(0.2) : Colors.white,
+                color: isDark
+                    ? AppColors.surfaceLight.withOpacity(0.2)
+                    : Colors.white,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
@@ -183,13 +207,20 @@ class _HomePageState extends State<HomePage> {
                     children: [
                       Hero(
                         tag: 'sermon_icon_${sermon.title}',
-                        child: const Icon(Icons.play_circle_fill, color: AppColors.primary, size: 40)
+                        child: const Icon(
+                          Icons.play_circle_fill,
+                          color: AppColors.primary,
+                          size: 40,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           sermon.title,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -199,11 +230,18 @@ class _HomePageState extends State<HomePage> {
                   const Spacer(),
                   Text(
                     sermon.author,
-                    style: const TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   Text(
                     sermon.date,
-                    style: TextStyle(color: isDark ? Colors.white60 : Colors.black54, fontSize: 12),
+                    style: TextStyle(
+                      color: isDark ? Colors.white60 : Colors.black54,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
@@ -216,8 +254,14 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildEventsCarousel(bool isDark) {
     return SizedBox(
-      height: 200,
-      child: ListView.builder(
+      height: context.responsiveValue(mobile: 190.0, tablet: 210.0),
+      child: _recentEvents.isEmpty
+          ? const EmptyStatePlaceholder(
+              icon: Icons.event_busy_outlined,
+              message: 'Aucun événement à venir pour le moment.',
+              compact: true,
+            )
+          : ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: _recentEvents.length,
@@ -233,7 +277,11 @@ class _HomePageState extends State<HomePage> {
               );
             },
             child: Container(
-              width: 160,
+              width: context.responsiveValue(
+                mobile: context.percentWidth(52).clamp(150.0, 220.0),
+                tablet: 180,
+                desktop: 220,
+              ),
               margin: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
@@ -262,7 +310,11 @@ class _HomePageState extends State<HomePage> {
                         color: Colors.transparent,
                         child: Text(
                           event.title,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -271,7 +323,10 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(height: 4),
                     Text(
                       event.date,
-                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
@@ -285,8 +340,14 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildGalleryCarousel(bool isDark) {
     return SizedBox(
-      height: 150,
-      child: ListView.builder(
+      height: context.responsiveValue(mobile: 140.0, tablet: 160.0),
+      child: _recentGallery.isEmpty
+          ? const EmptyStatePlaceholder(
+              icon: Icons.photo_library_outlined,
+              message: 'Aucune photo disponible pour le moment.',
+              compact: true,
+            )
+          : ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: _recentGallery.length,
@@ -297,15 +358,17 @@ class _HomePageState extends State<HomePage> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => ImageViewer(
-                    imageUrl: photo.url,
-                    title: photo.title,
-                  ),
+                  builder: (context) =>
+                      ImageViewer(imageUrl: photo.url, title: photo.title),
                 ),
               );
             },
             child: Container(
-              width: 150,
+              width: context.responsiveValue(
+                mobile: context.percentWidth(48).clamp(120.0, 180.0),
+                tablet: 160,
+                desktop: 200,
+              ),
               margin: const EdgeInsets.symmetric(horizontal: 8),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(15),
@@ -326,12 +389,19 @@ class _HomePageState extends State<HomePage> {
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [Colors.transparent, Colors.black.withOpacity(0.6)],
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withOpacity(0.6),
+                            ],
                           ),
                         ),
                         child: Text(
                           photo.title,
-                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -355,7 +425,7 @@ class _WelcomeSection extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(context.pageHorizontalPadding),
       decoration: BoxDecoration(
         color: AppColors.primary.withOpacity(0.1),
         borderRadius: const BorderRadius.only(
@@ -369,15 +439,15 @@ class _WelcomeSection extends StatelessWidget {
           Text(
             "Bienvenue,",
             style: TextStyle(
-              fontSize: 28,
+              fontSize: context.responsiveValue(mobile: 24.0, tablet: 28.0),
               fontWeight: FontWeight.bold,
               color: isDark ? Colors.white : Colors.black87,
             ),
           ),
-          const Text(
+          Text(
             "La Bonne Semence est heureuse de vous retrouver.",
             style: TextStyle(
-              fontSize: 16,
+              fontSize: context.responsiveValue(mobile: 14.0, tablet: 16.0),
               color: AppColors.primary,
               fontWeight: FontWeight.w500,
             ),

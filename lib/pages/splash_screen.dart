@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:la_bonne_semence_mobile/pages/register_page.dart';
+import 'package:la_bonne_semence_mobile/services/apiService/auth_service.dart';
 import 'package:la_bonne_semence_mobile/theme/app_colors.dart';
+import 'package:la_bonne_semence_mobile/widget/home_layout.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -16,12 +18,17 @@ class _SplashScreenState extends State<SplashScreen> {
     _navigateToHome();
   }
 
-  _navigateToHome() async {
+  Future<void> _navigateToHome() async {
     await Future.delayed(const Duration(seconds: 3));
+    if (!mounted) return;
+    final hasValidSession = await AuthService.instance.restoreSession();
     if (!mounted) return;
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => const RegisterPage()),
+      MaterialPageRoute(
+        builder: (context) =>
+            hasValidSession ? const HomeLayout() : const RegisterPage(),
+      ),
     );
   }
 
@@ -33,11 +40,7 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.church_outlined,
-              size: 100,
-              color: Colors.white,
-            ),
+            const Icon(Icons.church_outlined, size: 100, color: Colors.white),
             const SizedBox(height: 24),
             const Text(
               'La Bonne Semence',

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:la_bonne_semence_mobile/theme/app_colors.dart';
+import 'package:la_bonne_semence_mobile/services/responsive_utils.dart';
 
 class AboutUsPage extends StatelessWidget {
   const AboutUsPage({super.key});
@@ -9,7 +10,7 @@ class AboutUsPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text("À propos de nous")),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: EdgeInsets.all(context.pageHorizontalPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -50,18 +51,58 @@ class AboutUsPage extends StatelessWidget {
                 children: [
                   const Text("La bonne semence s'ancre sur quatre bases :"),
                   const SizedBox(height: 16),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
-                      Expanded(child: _buildInfoCard("Le mystère de l'église", "Aimer Dieu ainsi que son prochain est la source et le sommet de toute la vie chrétienne")),
-                      Expanded(child: _buildInfoCard("La consolation et la compassion", "Soutenir mutuellement les familles dans l’affliction, la solitude ou la détresse financière")),
-                    ],
-                  ),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: _buildInfoCard("L'accompagnement des enfants", "Être là et accompagner tous les enfants dans leur marche sur le chemin de la foi.")),
-                      Expanded(child: _buildInfoCard("L’Engagement", "La foi s’exprime concrètement par les œuvres d’amour fraternel.")),
+                      SizedBox(
+                        width: context.screenWidth < 500
+                            ? double.infinity
+                            : (context.screenWidth -
+                                      (context.pageHorizontalPadding * 2) -
+                                      8) /
+                                  2,
+                        child: _buildInfoCard(
+                          "Le mystère de l'église",
+                          "Aimer Dieu ainsi que son prochain est la source et le sommet de toute la vie chrétienne",
+                        ),
+                      ),
+                      SizedBox(
+                        width: context.screenWidth < 500
+                            ? double.infinity
+                            : (context.screenWidth -
+                                      (context.pageHorizontalPadding * 2) -
+                                      8) /
+                                  2,
+                        child: _buildInfoCard(
+                          "La consolation et la compassion",
+                          "Soutenir mutuellement les familles dans l’affliction, la solitude ou la détresse financière",
+                        ),
+                      ),
+                      SizedBox(
+                        width: context.screenWidth < 500
+                            ? double.infinity
+                            : (context.screenWidth -
+                                      (context.pageHorizontalPadding * 2) -
+                                      8) /
+                                  2,
+                        child: _buildInfoCard(
+                          "L'accompagnement des enfants",
+                          "Être là et accompagner tous les enfants dans leur marche sur le chemin de la foi.",
+                        ),
+                      ),
+                      SizedBox(
+                        width: context.screenWidth < 500
+                            ? double.infinity
+                            : (context.screenWidth -
+                                      (context.pageHorizontalPadding * 2) -
+                                      8) /
+                                  2,
+                        child: _buildInfoCard(
+                          "L’Engagement",
+                          "La foi s’exprime concrètement par les œuvres d’amour fraternel.",
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -95,11 +136,7 @@ class AboutUsPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 4),
-            Container(
-              height: 2,
-              width: 40,
-              color: AppColors.primary,
-            ),
+            Container(height: 2, width: 40, color: AppColors.primary),
             const SizedBox(height: 12),
             content,
           ],
@@ -118,7 +155,11 @@ class AboutUsPage extends StatelessWidget {
           children: [
             Text(
               title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary),
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+                color: AppColors.primary,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 4),

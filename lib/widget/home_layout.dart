@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:la_bonne_semence_mobile/pages/about_us_page.dart';
+import 'package:la_bonne_semence_mobile/pages/account_page.dart';
+import 'package:la_bonne_semence_mobile/pages/admin_page.dart';
 import 'package:la_bonne_semence_mobile/pages/calendar_page.dart';
+import 'package:la_bonne_semence_mobile/pages/contact_page.dart';
+import 'package:la_bonne_semence_mobile/pages/donnation_page.dart';
 import 'package:la_bonne_semence_mobile/pages/galery_page.dart';
 import 'package:la_bonne_semence_mobile/pages/home_page.dart';
 import 'package:la_bonne_semence_mobile/pages/sermons_page.dart';
-import 'package:la_bonne_semence_mobile/pages/donnation_page.dart';
-import 'package:la_bonne_semence_mobile/pages/contact_page.dart';
-import 'package:la_bonne_semence_mobile/pages/about_us_page.dart';
-import 'package:la_bonne_semence_mobile/pages/account_page.dart';
 import 'package:la_bonne_semence_mobile/pages/setting_page.dart';
-import 'package:la_bonne_semence_mobile/pages/admin_page.dart';
+import 'package:la_bonne_semence_mobile/services/responsive_utils.dart';
 import 'package:la_bonne_semence_mobile/theme/app_theme.dart';
 import 'package:provider/provider.dart';
 import 'package:salomon_bottom_bar/salomon_bottom_bar.dart';
@@ -22,22 +23,29 @@ class HomeLayout extends StatefulWidget {
   State<HomeLayout> createState() => _HomeLayoutState();
 }
 
-class _HomeLayoutState extends State<HomeLayout> with SingleTickerProviderStateMixin {
+class _HomeLayoutState extends State<HomeLayout> {
   int _currentIndex = 0;
-  int? _selectedRailIndex;
-  bool _isRailExtended = false;
-  bool _showRail = true;
-  bool _isDisplayingRailPage = false;
+  int? _selectedDrawerIndex;
+  bool _isDisplayingDrawerPage = false;
+
+  late final List<Widget> _bottomPages;
+
+  final List<Widget> _drawerPages = const [
+    DonnationPage(),
+    ContactPage(),
+    AboutUsPage(),
+    Profile(),
+    SettingPage(),
+    AdminPage(),
+  ];
 
   void _onNavigate(int index) {
     setState(() {
       _currentIndex = index;
-      _isDisplayingRailPage = false;
-      _selectedRailIndex = null;
+      _isDisplayingDrawerPage = false;
+      _selectedDrawerIndex = null;
     });
   }
-
-  late final List<Widget> _bottomPages;
 
   @override
   void initState() {
@@ -50,207 +58,296 @@ class _HomeLayoutState extends State<HomeLayout> with SingleTickerProviderStateM
     ];
   }
 
-  final List<Widget> _railPages = [
-    const DonnationPage(),
-    const ContactPage(),
-    const AboutUsPage(),
-    const Profile(), 
-    const SettingPage(),
-    const AdminPage(),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-
-    Widget currentBody = _isDisplayingRailPage 
-        ? _railPages[_selectedRailIndex ?? 0]
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final currentBody = _isDisplayingDrawerPage
+        ? _drawerPages[_selectedDrawerIndex ?? 0]
         : _bottomPages[_currentIndex];
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
+        backgroundColor: isDark
+            ? AppColors.backgroundDark
+            : AppColors.backgroundLight,
         elevation: 0,
         centerTitle: true,
         title: Row(
           mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(
-              Icons.church_outlined,
-              color: AppColors.primary,
-            ),
-            SizedBox(width: 12),
+          children: [
+            const Icon(Icons.church_outlined, color: AppColors.primary),
+            const SizedBox(width: 12),
             Text(
-              "La Bonne Semence",
-              style: TextStyle(
+              'La Bonne Semence',
+              style: const TextStyle(
                 color: AppColors.primary,
                 fontWeight: FontWeight.bold,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
       ),
-      body: Row(
-        children: [
-          // Navigation Rail
-          if (_showRail) ...[
-            NavigationRail(
-              extended: _isRailExtended,
-              selectedIndex: _selectedRailIndex,
-              onDestinationSelected: (int index) {
-                setState(() {
-                  _selectedRailIndex = index;
-                  _isDisplayingRailPage = true;
-                });
-              },
-              labelType: NavigationRailLabelType.none,
-              backgroundColor: isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
-              selectedIconTheme: const IconThemeData(color: AppColors.primary),
-              unselectedIconTheme: IconThemeData(color: isDark ? Colors.white70 : Colors.black54),
-              leading: Column(
+      drawer: _buildDrawer(context, isDark, themeProvider),
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 500),
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position:
+                Tween<Offset>(
+                  begin: const Offset(0.05, 0),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(parent: animation, curve: Curves.easeOut),
+                ),
+            child: child,
+          ),
+        ),
+        child: KeyedSubtree(
+          key: ValueKey(
+            _isDisplayingDrawerPage
+                ? 'drawer_$_selectedDrawerIndex'
+                : 'bottom_$_currentIndex',
+          ),
+          child: currentBody,
+        ),
+      ),
+      bottomNavigationBar: _buildBottomNavigation(context, isDark),
+    );
+  }
+
+  Widget _buildDrawer(
+    BuildContext context,
+    bool isDark,
+    ThemeProvider themeProvider,
+  ) {
+    final textColor = isDark ? Colors.white : AppColors.textPrimary;
+    final items = <({IconData icon, IconData selectedIcon, String label})>[
+      (
+        icon: Icons.volunteer_activism_outlined,
+        selectedIcon: Icons.volunteer_activism,
+        label: 'Dons',
+      ),
+      (
+        icon: Icons.contact_support_outlined,
+        selectedIcon: Icons.contact_support,
+        label: 'Contact',
+      ),
+      (icon: Icons.info_outline, selectedIcon: Icons.info, label: 'À propos'),
+      (
+        icon: Icons.account_circle_outlined,
+        selectedIcon: Icons.account_circle,
+        label: 'Compte',
+      ),
+      (
+        icon: Icons.settings_outlined,
+        selectedIcon: Icons.settings,
+        label: 'Paramètres',
+      ),
+      (
+        icon: Icons.admin_panel_settings_outlined,
+        selectedIcon: Icons.admin_panel_settings,
+        label: 'Admin',
+      ),
+    ];
+
+    return Drawer(
+      child: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 16, 16),
+              child: Row(
                 children: [
-                  const SizedBox(height: 8),
-                  IconButton(
-                    icon: Icon(_isRailExtended ? Icons.menu_open : Icons.menu),
-                    onPressed: () {
-                      setState(() {
-                        _isRailExtended = !_isRailExtended;
-                      });
-                    },
-                    color: AppColors.primary,
+                  const Icon(Icons.church_outlined, color: AppColors.primary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'La Bonne Semence',
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 16),
                   IconButton(
-                    icon: Icon(isDark ? Icons.dark_mode : Icons.light_mode),
+                    tooltip: isDark
+                        ? 'Activer le thème clair'
+                        : 'Activer le thème sombre',
+                    icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+                    color: AppColors.primary,
                     onPressed: () => themeProvider.toggleTheme(!isDark),
-                    color: AppColors.primary,
                   ),
-                  const SizedBox(height: 8),
                 ],
               ),
-              destinations: const [
-                NavigationRailDestination(
-                  icon: Icon(Icons.volunteer_activism_outlined),
-                  selectedIcon: Icon(Icons.volunteer_activism),
-                  label: Text('Dons'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.contact_support_outlined),
-                  selectedIcon: Icon(Icons.contact_support),
-                  label: Text('Contact'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.info_outline),
-                  selectedIcon: Icon(Icons.info),
-                  label: Text('À propos'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.account_circle_outlined),
-                  selectedIcon: Icon(Icons.account_circle),
-                  label: Text('Compte'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.settings_outlined),
-                  selectedIcon: Icon(Icons.settings),
-                  label: Text('Paramètres'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.admin_panel_settings_outlined),
-                  selectedIcon: Icon(Icons.admin_panel_settings),
-                  label: Text('Admin'),
-                ),
-              ],
             ),
-            const VerticalDivider(thickness: 1, width: 1),
-          ],
-          // Contenu principal avec animation de transition
-          Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 500),
-              transitionBuilder: (Widget child, Animation<double> animation) {
-                return FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0.05, 0),
-                      end: Offset.zero,
-                    ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
-                    child: child,
-                  ),
-                );
-              },
-              child: KeyedSubtree(
-                key: ValueKey(_isDisplayingRailPage ? "rail_$_selectedRailIndex" : "bottom_$_currentIndex"),
-                child: currentBody,
+            const Divider(height: 1),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  final isSelected =
+                      _isDisplayingDrawerPage && _selectedDrawerIndex == index;
+                  return ListTile(
+                    leading: Icon(isSelected ? item.selectedIcon : item.icon),
+                    title: Text(item.label),
+                    selected: isSelected,
+                    selectedColor: AppColors.primary,
+                    onTap: () {
+                      setState(() {
+                        _selectedDrawerIndex = index;
+                        _isDisplayingDrawerPage = true;
+                      });
+                      Navigator.of(context).pop();
+                    },
+                  );
+                },
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomNavigation(BuildContext context, bool isDark) {
+    final horizontalMargin = context.screenWidth < 360 ? 8.0 : 20.0;
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 600),
+      margin: EdgeInsets.fromLTRB(
+        horizontalMargin,
+        0,
+        horizontalMargin,
+        context.responsiveValue(mobile: 24.0, tablet: 32.0),
+      ),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.backgroundDark : Colors.white,
+        borderRadius: BorderRadius.circular(35),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.miniStartFloat,
-      floatingActionButton: FloatingActionButton(
-        mini: true,
-        backgroundColor: AppColors.primary,
-        onPressed: () {
-          setState(() {
-            _showRail = !_showRail;
-          });
-        },
-        child: Icon(
-          _showRail ? Icons.keyboard_arrow_left : Icons.keyboard_arrow_right,
-          color: Colors.white,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(35),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < double.infinity) {
+              return _buildCompactBottomNavigation(isDark);
+            }
+
+            return SalomonBottomBar(
+              currentIndex: _currentIndex,
+              onTap: _onNavigate,
+              unselectedItemColor: isDark ? Colors.white70 : Colors.black54,
+              items: [
+                SalomonBottomBarItem(
+                  icon: const Icon(Icons.home_rounded),
+                  title: const Text('Accueil'),
+                  selectedColor: AppColors.primary,
+                ),
+                SalomonBottomBarItem(
+                  icon: const Icon(Icons.book_rounded),
+                  title: const Text('Enseignements'),
+                  selectedColor: AppColors.primary,
+                ),
+                SalomonBottomBarItem(
+                  icon: const Icon(Icons.calendar_month_sharp),
+                  title: const Text('Activités'),
+                  selectedColor: AppColors.primary,
+                ),
+                SalomonBottomBarItem(
+                  icon: const Icon(Icons.photo_camera),
+                  title: const Text('Galerie'),
+                  selectedColor: AppColors.primary,
+                ),
+              ],
+            );
+          },
         ),
       ),
-      bottomNavigationBar: Container(
-        margin: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.backgroundDark : Colors.white,
-          borderRadius: BorderRadius.circular(35),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.15),
-              blurRadius: 15,
-              offset: const Offset(0, 8),
-            )
-          ]
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(35),
-          child: SalomonBottomBar(
-            currentIndex: _currentIndex,
-            onTap: (i) {
-              setState(() {
-                _currentIndex = i;
-                _isDisplayingRailPage = false;
-                _selectedRailIndex = null;
-              });
-            },
-            unselectedItemColor: isDark ? Colors.white70 : Colors.black54,
-            items: [
-              SalomonBottomBarItem(
-                icon: const Icon(Icons.home_rounded),
-                title: const Text("Accueil"),
-                selectedColor: AppColors.primary,
+    );
+  }
+
+  Widget _buildCompactBottomNavigation(bool isDark) {
+    const destinations = [
+      (icon: Icons.home_rounded, label: 'Accueil'),
+      (icon: Icons.book_rounded, label: 'Enseignements'),
+      (icon: Icons.calendar_month_sharp, label: 'Activités'),
+      (icon: Icons.photo_camera, label: 'Galerie'),
+    ];
+
+    return SizedBox(
+      height: 68,
+      child: Row(
+        children: List.generate(destinations.length, (index) {
+          final destination = destinations[index];
+          final isSelected = index == _currentIndex;
+          return Expanded(
+            child: Semantics(
+              selected: isSelected,
+              label: destination.label,
+              button: true,
+              child: Tooltip(
+                message: destination.label,
+                child: InkWell(
+                  onTap: () => _onNavigate(index),
+                  borderRadius: BorderRadius.circular(30),
+                  child: Center(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppColors.primary.withValues(alpha: 0.14)
+                                  : Colors.transparent,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              destination.icon,
+                              size: 22,
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : (isDark ? Colors.white70 : Colors.black54),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              destination.label,
+                              maxLines: 1,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                color: isSelected
+                                    ? AppColors.primary
+                                    : (isDark ? Colors.white70 : Colors.black54),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              SalomonBottomBarItem(
-                icon: const Icon(Icons.book_rounded),
-                title: const Text("Enseignements"),
-                selectedColor: AppColors.primary,
-              ),
-              SalomonBottomBarItem(
-                icon: const Icon(Icons.calendar_month_sharp),
-                title: const Text("Activités"),
-                selectedColor: AppColors.primary,
-              ),
-              SalomonBottomBarItem(
-                icon: const Icon(Icons.photo_camera),
-                title: const Text("Galerie"),
-                selectedColor: AppColors.primary,
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        }),
       ),
     );
   }

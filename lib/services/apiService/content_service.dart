@@ -1,5 +1,6 @@
 import 'package:la_bonne_semence_mobile/services/apiService/api_client.dart';
 import 'package:la_bonne_semence_mobile/services/apiService/config.dart';
+import 'package:la_bonne_semence_mobile/models/contact_message.dart';
 
 class ContentService {
   ContentService._();
@@ -13,12 +14,32 @@ class ContentService {
     required String message,
   }) async {
     await ApiClient.instance.post(Config.contactsUrl, {
-      'name': name,
+      'nom': name,
       'email': email,
-      'subject': subject,
-      'message': message,
+      'sujet': subject,
+      'contenu': message,
     });
   }
+
+  Future<List<ContactMessage>> fetchContacts() async {
+    final data = await ApiClient.instance.get(
+      Config.contactsUrl,
+      authenticated: true,
+    );
+    final items = data is List
+        ? data
+        : data is Map<String, dynamic>
+        ? data['data'] ?? data['contacts'] ?? data['items']
+        : null;
+    return items is List
+        ? items.whereType<Map<String, dynamic>>().map(ContactMessage.fromJson).toList()
+        : const [];
+  }
+
+  Future<void> deleteContact(String id) => ApiClient.instance.delete(
+    '${Config.contactsUrl}/${Uri.encodeComponent(id)}',
+    authenticated: true,
+  );
 
   Future<Map<String, dynamic>> createDonation({
     required String name,

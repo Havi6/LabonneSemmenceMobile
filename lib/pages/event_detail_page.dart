@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:la_bonne_semence_mobile/theme/app_colors.dart';
 import 'package:la_bonne_semence_mobile/services/app_data.dart';
 import 'package:la_bonne_semence_mobile/pages/video_player_page.dart';
+import 'package:la_bonne_semence_mobile/services/responsive_utils.dart';
 
 class EventDetailPage extends StatelessWidget {
   final Event event;
@@ -17,15 +18,12 @@ class EventDetailPage extends StatelessWidget {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 300,
+            expandedHeight: context.percentHeight(35).clamp(200.0, 450.0),
             pinned: true,
             flexibleSpace: FlexibleSpaceBar(
               background: Hero(
                 tag: 'event_${event.imageUrl}',
-                child: Image.network(
-                  event.imageUrl,
-                  fit: BoxFit.cover,
-                ),
+                child: Image.network(event.imageUrl, fit: BoxFit.cover),
               ),
             ),
             leading: Padding(
@@ -41,7 +39,9 @@ class EventDetailPage extends StatelessWidget {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(24.0),
+              padding: EdgeInsets.all(
+                context.responsiveValue(mobile: 20.0, tablet: 32.0),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -49,7 +49,10 @@ class EventDetailPage extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.primary,
                           borderRadius: BorderRadius.circular(10),
@@ -65,7 +68,11 @@ class EventDetailPage extends StatelessWidget {
                       ),
                       if (event.videoUrl != null)
                         IconButton(
-                          icon: const Icon(Icons.play_circle_fill, color: AppColors.primary, size: 32),
+                          icon: const Icon(
+                            Icons.play_circle_fill,
+                            color: AppColors.primary,
+                            size: 32,
+                          ),
                           onPressed: () {
                             Navigator.push(
                               context,
@@ -85,21 +92,37 @@ class EventDetailPage extends StatelessWidget {
                     event.title,
                     style: theme.textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
+                      fontSize: context.responsiveValue(
+                        mobile: 22.0,
+                        tablet: 28.0,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
-                  _buildDetailRow(Icons.calendar_today, "Date", event.date, isDark),
+                  _buildDetailRow(
+                    Icons.calendar_today,
+                    "Date",
+                    event.date,
+                    isDark,
+                  ),
                   const SizedBox(height: 16),
-                  _buildDetailRow(Icons.access_time, "Heure", event.time, isDark),
+                  _buildDetailRow(
+                    Icons.access_time,
+                    "Heure",
+                    event.time,
+                    isDark,
+                  ),
                   const SizedBox(height: 16),
-                  _buildDetailRow(Icons.location_on_outlined, "Lieu", event.location, isDark),
+                  _buildDetailRow(
+                    Icons.location_on_outlined,
+                    "Lieu",
+                    event.location,
+                    isDark,
+                  ),
                   const SizedBox(height: 32),
                   const Text(
                     "Description",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -134,8 +157,12 @@ class EventDetailPage extends StatelessWidget {
                               label: const Text("Regarder l'enseignement"),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: AppColors.primary,
-                                side: const BorderSide(color: AppColors.primary),
-                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                side: const BorderSide(
+                                  color: AppColors.primary,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(15),
                                 ),
@@ -157,7 +184,10 @@ class EventDetailPage extends StatelessWidget {
                           ),
                           child: const Text(
                             "S'inscrire / Participer",
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
@@ -173,7 +203,12 @@ class EventDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildDetailRow(IconData icon, String label, String value, bool isDark) {
+  Widget _buildDetailRow(
+    IconData icon,
+    String label,
+    String value,
+    bool isDark,
+  ) {
     return Row(
       children: [
         Container(
@@ -185,24 +220,26 @@ class EventDetailPage extends StatelessWidget {
           child: Icon(icon, color: AppColors.primary, size: 20),
         ),
         const SizedBox(width: 16),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                color: isDark ? Colors.white54 : Colors.black54,
-                fontSize: 12,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: isDark ? Colors.white54 : Colors.black54,
+                  fontSize: 12,
+                ),
               ),
-            ),
-            Text(
-              value,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
+              Text(
+                value,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );

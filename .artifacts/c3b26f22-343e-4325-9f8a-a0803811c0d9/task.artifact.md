@@ -1,0 +1,14 @@
+- [x] Créer `lib/services/responsive_utils.dart`
+- [x] Modifier `lib/widget/home_layout.dart` (Adaptation NavigationRail)
+- [x] Modifier `lib/pages/home_page.dart` (Carousels adaptatifs)
+- [x] Modifier `lib/pages/sermon_player_page.dart` (Lecteur adaptatif)
+- [x] Révision des pages de formulaire (Login/Register)
+- [x] Optimisation de la Bottom Bar dans `home_layout.dart`
+- [x] Rendre `lib/pages/calendar_page.dart` responsive
+- [x] Rendre `lib/pages/galery_page.dart` responsive
+- [x] Rendre `lib/pages/about_us_page.dart` responsive
+- [x] Rendre `lib/pages/account_page.dart` responsive
+- [x] Rendre `lib/pages/sermons_page.dart` responsive
+- [x] Rendre `lib/pages/donnation_page.dart` responsive
+- [x] Rendre `lib/pages/event_detail_page.dart` responsive
+- [x] Vérification finale globale

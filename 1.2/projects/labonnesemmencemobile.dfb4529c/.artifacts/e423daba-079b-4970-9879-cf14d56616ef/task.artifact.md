@@ -1,0 +1,8 @@
+- [x] Add `SingleTickerProviderStateMixin` and `TabController` to `_AdminPageState`
+- [x] Initialize and dispose `TabController`
+- [x] Refactor `build` method to use manual `TabController` instead of `DefaultTabController`
+- [x] Refactor `_showEditor` to ensure safe controller disposal
+- [x] Verify AdminPage stability
+- [x] Implement `_normalizeUrl` in `app_data.dart`
+- [x] Apply normalization to `Sermon`, `Event`, and `GalleryItem`
+- [x] Verify image loading fix

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:la_bonne_semence_mobile/theme/app_colors.dart';
 import 'package:la_bonne_semence_mobile/widget/reveal_item.dart';
+import 'package:la_bonne_semence_mobile/widget/empty_state_placeholder.dart';
 import 'package:la_bonne_semence_mobile/pages/event_detail_page.dart';
 import 'package:la_bonne_semence_mobile/services/app_data.dart';
+import 'package:la_bonne_semence_mobile/services/responsive_utils.dart';
 
 class CalendarPage extends StatefulWidget {
   const CalendarPage({super.key});
@@ -12,12 +14,18 @@ class CalendarPage extends StatefulWidget {
 }
 
 class _CalendarPageState extends State<CalendarPage> {
-  List<Event> _events = AppData.events;
+  List<Event> _events = const [];
   bool _isLoading = true;
 
   String _searchQuery = "";
   String _selectedFilter = "Tous";
-  final List<String> _filters = ["Tous", "jeunesse", "culte", "prière", "social"];
+  final List<String> _filters = [
+    "Tous",
+    "jeunesse",
+    "culte",
+    "prière",
+    "social",
+  ];
 
   @override
   void initState() {
@@ -30,7 +38,7 @@ class _CalendarPageState extends State<CalendarPage> {
       final events = await AppData.fetchEvents();
       if (!mounted) return;
       setState(() {
-        _events = events.isEmpty ? AppData.events : events;
+        _events = events;
         _isLoading = false;
       });
     } catch (_) {
@@ -44,9 +52,11 @@ class _CalendarPageState extends State<CalendarPage> {
     final isDark = theme.brightness == Brightness.dark;
 
     final filteredEvents = _events.where((event) {
-      final matchesSearch = event.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+      final matchesSearch =
+          event.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           event.description.toLowerCase().contains(_searchQuery.toLowerCase());
-      final matchesFilter = _selectedFilter == "Tous" || event.label == _selectedFilter;
+      final matchesFilter =
+          _selectedFilter == "Tous" || event.label == _selectedFilter;
       return matchesSearch && matchesFilter;
     }).toList();
 
@@ -62,7 +72,9 @@ class _CalendarPageState extends State<CalendarPage> {
                 hintText: "Rechercher un évènement...",
                 prefixIcon: const Icon(Icons.search, color: AppColors.primary),
                 filled: true,
-                fillColor: isDark ? AppColors.surfaceLight.withOpacity(0.2) : Colors.white,
+                fillColor: isDark
+                    ? AppColors.surfaceLight.withOpacity(0.2)
+                    : Colors.white,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(30),
                   borderSide: BorderSide.none,
@@ -89,8 +101,12 @@ class _CalendarPageState extends State<CalendarPage> {
                     },
                     selectedColor: AppColors.primary,
                     labelStyle: TextStyle(
-                      color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: isSelected
+                          ? Colors.white
+                          : (isDark ? Colors.white70 : Colors.black87),
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
                   ),
                 );
@@ -101,36 +117,56 @@ class _CalendarPageState extends State<CalendarPage> {
           // Grid View
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.primary),
+                  )
+                : filteredEvents.isEmpty
+                ? EmptyStatePlaceholder(
+                    icon: _events.isEmpty
+                        ? Icons.event_busy_outlined
+                        : Icons.search_off,
+                    message: _events.isEmpty
+                        ? 'Aucun événement disponible pour le moment.'
+                        : 'Aucun événement ne correspond à votre recherche.',
+                  )
                 : GridView.builder(
-              padding: const EdgeInsets.all(16),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 0.65,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-              ),
-              itemCount: filteredEvents.length,
-              itemBuilder: (context, index) {
-                final event = filteredEvents[index];
-                return RevealItem(
-                  delay: Duration(milliseconds: (index % 4) * 100),
-                  child: GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => EventDetailPage(event: event),
+                    padding: const EdgeInsets.all(16),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: context.responsiveValue(
+                        mobile: context.screenWidth < 350 ? 1 : 2,
+                        tablet: 3,
+                        desktop: 4,
+                      ),
+                      childAspectRatio: context.responsiveValue(
+                        mobile: 0.65,
+                        tablet: 0.75,
+                        desktop: 0.85,
+                      ),
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                    ),
+                    itemCount: filteredEvents.length,
+                    itemBuilder: (context, index) {
+                      final event = filteredEvents[index];
+                      return RevealItem(
+                        delay: Duration(milliseconds: (index % 4) * 100),
+                        child: GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    EventDetailPage(event: event),
+                              ),
+                            );
+                          },
+                          child: _buildEventCard(event, isDark, theme),
                         ),
                       );
                     },
-                    child: _buildEventCard(event, isDark, theme),
                   ),
-                );
-              },
-            ),
           ),
-          const SizedBox(height: 80),
+          SizedBox(height: context.bottomNavigationClearance),
         ],
       ),
     );
@@ -152,16 +188,16 @@ class _CalendarPageState extends State<CalendarPage> {
               children: [
                 Hero(
                   tag: 'event_${event.imageUrl}',
-                  child: Image.network(
-                    event.imageUrl,
-                    fit: BoxFit.cover,
-                  ),
+                  child: Image.network(event.imageUrl, fit: BoxFit.cover),
                 ),
                 Positioned(
                   top: 8,
                   left: 8,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.primary,
                       borderRadius: BorderRadius.circular(10),
@@ -191,14 +227,20 @@ class _CalendarPageState extends State<CalendarPage> {
                     event.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     event.description,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11, color: isDark ? Colors.white70 : Colors.black54),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? Colors.white70 : Colors.black54,
+                    ),
                   ),
                   const Spacer(),
                   _buildIconText(Icons.calendar_today, event.date),

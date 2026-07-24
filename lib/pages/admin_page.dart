@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:la_bonne_semence_mobile/services/apiService/api_client.dart';
+import 'package:la_bonne_semence_mobile/services/app_data.dart';
+import 'package:la_bonne_semence_mobile/services/responsive_utils.dart';
 import 'package:la_bonne_semence_mobile/theme/app_colors.dart';
-import 'package:la_bonne_semence_mobile/widget/reveal_item.dart';
 
 class AdminPage extends StatefulWidget {
   const AdminPage({super.key});
@@ -9,270 +12,737 @@ class AdminPage extends StatefulWidget {
   State<AdminPage> createState() => _AdminPageState();
 }
 
-class _AdminPageState extends State<AdminPage> {
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+class _EditorResult {
+  const _EditorResult(this.values, this.files);
 
-    return DefaultTabController(
-      length: 6,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text("Administration", style: TextStyle(fontWeight: FontWeight.bold)),
-          centerTitle: true,
-          bottom: const TabBar(
-            isScrollable: true,
-            indicatorColor: AppColors.primary,
-            labelColor: AppColors.primary,
-            unselectedLabelColor: Colors.grey,
-            tabs: [
-              Tab(icon: Icon(Icons.dashboard_outlined), text: "Dashboard"),
-              Tab(icon: Icon(Icons.people_outline), text: "Membres"),
-              Tab(icon: Icon(Icons.event_note_outlined), text: "Évènements"),
-              Tab(icon: Icon(Icons.mic_none_outlined), text: "Sermons"),
-              Tab(icon: Icon(Icons.photo_library_outlined), text: "Galerie"),
-              Tab(icon: Icon(Icons.volunteer_activism_outlined), text: "Dons"),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            _buildDashboardTab(isDark),
-            _buildMembersTab(isDark),
-            _buildEventsTab(isDark),
-            _buildSermonsTab(isDark),
-            _buildGalleryTab(isDark),
-            _buildDonationsTab(isDark),
+  final Map<String, String> values;
+  final Map<String, PlatformFile> files;
+}
+
+enum _FileInput { image, audio }
+
+class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  List<Sermon> _sermons = const [];
+  List<Event> _events = const [];
+  List<GalleryItem> _gallery = const [];
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 6, vsync: this);
+    _loadData();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadData({bool refresh = false}) async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final results = await Future.wait([
+        AppData.fetchSermons(forceRefresh: refresh, authenticated: true),
+        AppData.fetchEvents(forceRefresh: refresh, authenticated: true),
+        AppData.fetchGallery(forceRefresh: refresh, authenticated: true),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _sermons = results[0] as List<Sermon>;
+        _events = results[1] as List<Event>;
+        _gallery = results[2] as List<GalleryItem>;
+      });
+    } catch (error) {
+      if (mounted) _error = _message(error);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _replaceSermon(Sermon sermon) => setState(() {
+    final index = _sermons.indexWhere((item) => item.id == sermon.id);
+    _sermons = index == -1 ? [sermon, ..._sermons] : [..._sermons]
+      ..[index] = sermon;
+  });
+
+  void _replaceEvent(Event event) => setState(() {
+    final index = _events.indexWhere((item) => item.id == event.id);
+    _events = index == -1 ? [event, ..._events] : [..._events]
+      ..[index] = event;
+  });
+
+  Future<void> _deleteSermon(Sermon sermon) async {
+    if (sermon.id == null || !await _confirm('Supprimer ce sermon ?')) return;
+    await _runAction(() async {
+      await AppData.deleteSermon(sermon.id!);
+      setState(
+        () =>
+            _sermons = _sermons.where((item) => item.id != sermon.id).toList(),
+      );
+    }, 'Sermon supprimé.');
+  }
+
+  Future<void> _deleteEvent(Event event) async {
+    if (event.id == null || !await _confirm('Supprimer cet événement ?')) {
+      return;
+    }
+    await _runAction(() async {
+      await AppData.deleteEvent(event.id!);
+      setState(
+        () => _events = _events.where((item) => item.id != event.id).toList(),
+      );
+    }, 'Événement supprimé.');
+  }
+
+  Future<void> _deletePhoto(GalleryItem photo) async {
+    if (photo.id == null || !await _confirm('Supprimer cette photo ?')) return;
+    await _runAction(() async {
+      await AppData.deleteGalleryItem(photo.id!);
+      setState(
+        () => _gallery = _gallery.where((item) => item.id != photo.id).toList(),
+      );
+    }, 'Photo supprimée.');
+  }
+
+  Future<bool> _confirm(String message) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Confirmation'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Supprimer'),
+            ),
           ],
         ),
+      ) ??
+      false;
+
+  Future<void> _runAction(
+    Future<void> Function() action,
+    String success,
+  ) async {
+    try {
+      await action();
+      if (mounted) _showMessage(success);
+    } catch (error) {
+      if (mounted) _showMessage(_message(error), error: true);
+    }
+  }
+
+  String _message(Object error) => error is ApiException
+      ? error.message
+      : 'La requête a échoué. Vérifiez votre connexion.';
+
+  void _showMessage(String message, {bool error = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: error ? Colors.red.shade700 : Colors.green.shade700,
       ),
     );
   }
 
-  // --- TAB 1: DASHBOARD ---
-  Widget _buildDashboardTab(bool isDark) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const RevealItem(child: Text("Statistiques Globales", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
-          const SizedBox(height: 20),
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            crossAxisSpacing: 15,
-            mainAxisSpacing: 15,
-            childAspectRatio: 1.2, // Ajusté pour plus de hauteur par rapport à 1.5
-            children: [
-              _buildStatCard("Membres", "1,240", Icons.people, Colors.blue),
-              _buildStatCard("Sermons", "85", Icons.mic, Colors.orange),
-              _buildStatCard("Évènements", "12", Icons.event, Colors.green),
-              _buildStatCard("Dons (Mois)", "4.5M", Icons.payments, Colors.purple),
-            ],
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Administration',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Actualiser',
+            onPressed: () => _loadData(refresh: true),
           ),
-          const SizedBox(height: 30),
-          const RevealItem(delay: Duration(milliseconds: 200), child: Text("Activités Récentes", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
-          const SizedBox(height: 15),
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: 5,
-            itemBuilder: (context, index) => Card(
-              margin: const EdgeInsets.only(bottom: 10),
-              child: ListTile(
-                leading: const CircleAvatar(backgroundColor: AppColors.primary, child: Icon(Icons.notifications_none, color: Colors.white)),
-                title: Text("Nouvel inscrit : Membre #${index + 100}"),
-                subtitle: const Text("Il y a 2 heures"),
-              ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          indicatorColor: AppColors.primary,
+          labelColor: AppColors.primary,
+          unselectedLabelColor: Colors.grey,
+          tabs: const [
+            Tab(icon: Icon(Icons.dashboard_outlined), text: 'Dashboard'),
+            Tab(icon: Icon(Icons.people_outline), text: 'Membres'),
+            Tab(icon: Icon(Icons.event_note_outlined), text: 'Événements'),
+            Tab(icon: Icon(Icons.mic_none_outlined), text: 'Sermons'),
+            Tab(icon: Icon(Icons.photo_library_outlined), text: 'Galerie'),
+            Tab(icon: Icon(Icons.volunteer_activism_outlined), text: 'Dons'),
+          ],
+        ),
+      ),
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            )
+          : _error != null
+          ? _buildError()
+          : TabBarView(
+              controller: _tabController,
+              children: [
+                _buildDashboard(),
+                _buildUnavailable(
+                  'Les membres ne sont pas disponibles via le serveur.',
+                ),
+                _buildEvents(),
+                _buildSermons(),
+                _buildGallery(),
+                _buildUnavailable(
+                  'Les dons ne sont pas disponibles via le serveur.',
+                ),
+              ],
             ),
+    );
+  }
+
+  Widget _buildError() => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.cloud_off_outlined,
+            size: 52,
+            color: AppColors.primary,
+          ),
+          const SizedBox(height: 12),
+          Text(_error!, textAlign: TextAlign.center),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: () => _loadData(refresh: true),
+            icon: const Icon(Icons.refresh),
+            label: const Text('Réessayer'),
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
 
-  // --- TAB 2: MEMBRES ---
-  Widget _buildMembersTab(bool isDark) {
-    return Column(
+  Widget _buildDashboard() => SingleChildScrollView(
+    padding: EdgeInsets.all(context.pageHorizontalPadding),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: TextField(
-            decoration: InputDecoration(
-              hintText: "Rechercher un membre...",
-              prefixIcon: const Icon(Icons.search),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
-            ),
+        const Text(
+          'Statistiques du serveur',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 20),
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: context.responsiveValue(
+            mobile: context.screenWidth < 360 ? 1 : 2,
+            tablet: 3,
+            desktop: 3,
           ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            itemCount: 10,
-            itemBuilder: (context, index) => ListTile(
-              leading: const CircleAvatar(child: Icon(Icons.person)),
-              title: Text("Jean Philippe #${index + 1}"),
-              subtitle: Text("membre$index@email.com"),
-              trailing: IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () {}),
-            ),
+          crossAxisSpacing: 15,
+          mainAxisSpacing: 15,
+          childAspectRatio: context.responsiveValue(
+            mobile: context.screenWidth < 360 ? 2.1 : 1.1,
+            tablet: 1.25,
+            desktop: 1.4,
           ),
-        ),
-      ],
-    );
-  }
-
-  // --- TAB 3: ÉVÈNEMENTS ---
-  Widget _buildEventsTab(bool isDark) {
-    return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {},
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: 5,
-        itemBuilder: (context, index) => Card(
-          margin: const EdgeInsets.only(bottom: 15),
-          child: Column(
-            children: [
-              ListTile(
-                title: Text("Culte de louange #${index + 1}", style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text("Date: 12/12/2023 - Lieu: Temple"),
-                trailing: PopupMenuButton(
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(child: Text("Modifier")),
-                    const PopupMenuItem(child: Text("Supprimer", style: TextStyle(color: Colors.red))),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // --- TAB 4: SERMONS ---
-  Widget _buildSermonsTab(bool isDark) {
-    return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {},
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.upload_file, color: Colors.white),
-      ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: 8,
-        itemBuilder: (context, index) => ListTile(
-          leading: const Icon(Icons.audio_file_outlined, color: AppColors.primary),
-          title: Text("Sermon sur la grâce part ${index + 1}"),
-          subtitle: const Text("Pasteur Jean Dupont - 45:00"),
-          trailing: const Icon(Icons.more_vert),
-        ),
-      ),
-    );
-  }
-
-  // --- TAB 5: GALERIE ---
-  Widget _buildGalleryTab(bool isDark) {
-    return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {},
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add_a_photo, color: Colors.white),
-      ),
-      body: GridView.builder(
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-        ),
-        itemCount: 12,
-        itemBuilder: (context, index) => Container(
-          decoration: BoxDecoration(
-            color: Colors.grey[300],
-            borderRadius: BorderRadius.circular(10),
-            image: const DecorationImage(
-              image: NetworkImage("https://picsum.photos/200"),
-              fit: BoxFit.cover,
-            ),
-          ),
-          child: Stack(
-            children: [
-              Positioned(
-                right: 0,
-                child: IconButton(icon: const Icon(Icons.delete, color: Colors.white, size: 20), onPressed: () {}),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // --- TAB 6: DONS ---
-  Widget _buildDonationsTab(bool isDark) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          width: double.infinity,
-          color: AppColors.primary.withOpacity(0.1),
-          child: Column(
-            children: [
-              const Text("Total des dons ce mois"),
-              const SizedBox(height: 10),
-              Text("4,520,000 FCFA", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primary)),
-            ],
-          ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            itemCount: 15,
-            itemBuilder: (context, index) => ListTile(
-              leading: const CircleAvatar(backgroundColor: Colors.green, child: Icon(Icons.arrow_downward, color: Colors.white, size: 16)),
-              title: Text("Don de Membre #${index + 1}"),
-              subtitle: const Text("Dîme - 14 Oct. 2023"),
-              trailing: const Text("50,000 F", style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 4),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                value,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            _buildStatCard(
+              'Sermons',
+              _sermons.length,
+              Icons.mic,
+              Colors.orange,
+            ),
+            _buildStatCard(
+              'Événements',
+              _events.length,
+              Icons.event,
+              Colors.green,
+            ),
+            _buildStatCard(
+              'Photos',
+              _gallery.length,
+              Icons.photo_library,
+              Colors.purple,
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+
+  Widget _buildEvents() => _resourceLayout(
+    label: 'Ajouter un événement',
+    icon: Icons.add,
+    onAdd: () => _showEventEditor(),
+    isEmpty: _events.isEmpty,
+    empty: 'Aucun événement disponible.',
+    content: ListView.separated(
+      padding: EdgeInsets.all(context.pageHorizontalPadding),
+      itemCount: _events.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemBuilder: (_, index) {
+        final event = _events[index];
+        return Card(
+          child: ListTile(
+            title: Text(event.title),
+            subtitle: Text(
+              [
+                event.date,
+                event.location,
+              ].where((value) => value.isNotEmpty).join(' • '),
+            ),
+            trailing: _editDeleteMenu(
+              onEdit: () => _showEventEditor(event),
+              onDelete: () => _deleteEvent(event),
+            ),
+          ),
+        );
+      },
+    ),
+  );
+
+  Widget _buildSermons() => _resourceLayout(
+    label: 'Ajouter un sermon',
+    icon: Icons.add,
+    onAdd: () => _showSermonEditor(),
+    isEmpty: _sermons.isEmpty,
+    empty: 'Aucun sermon disponible.',
+    content: ListView.separated(
+      padding: EdgeInsets.all(context.pageHorizontalPadding),
+      itemCount: _sermons.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemBuilder: (_, index) {
+        final sermon = _sermons[index];
+        return Card(
+          child: ListTile(
+            leading: const Icon(
+              Icons.audio_file_outlined,
+              color: AppColors.primary,
+            ),
+            title: Text(sermon.title),
+            subtitle: Text(sermon.author),
+            trailing: _editDeleteMenu(
+              onEdit: () => _showSermonEditor(sermon),
+              onDelete: () => _deleteSermon(sermon),
+            ),
+          ),
+        );
+      },
+    ),
+  );
+
+  Widget _buildGallery() => _resourceLayout(
+    label: 'Téléverser une photo',
+    icon: Icons.upload_outlined,
+    onAdd: _uploadPhoto,
+    isEmpty: _gallery.isEmpty,
+    empty: 'Aucune photo disponible.',
+    content: GridView.builder(
+      padding: EdgeInsets.all(context.pageHorizontalPadding),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: context.responsiveValue(
+          mobile: 2,
+          tablet: 3,
+          desktop: 4,
+        ),
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+      ),
+      itemCount: _gallery.length,
+      itemBuilder: (_, index) {
+        final photo = _gallery[index];
+        return InkWell(
+          onTap: () => _showPhotoActions(photo),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.network(
+                  photo.url,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const ColoredBox(
+                    color: Colors.black12,
+                    child: Center(child: Icon(Icons.broken_image_outlined)),
+                  ),
+                ),
+                const Positioned(
+                  right: 4,
+                  top: 4,
+                  child: CircleAvatar(
+                    radius: 14,
+                    child: Icon(Icons.more_horiz, size: 18),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    ),
+  );
+
+  Widget _resourceLayout({
+    required String label,
+    required IconData icon,
+    required VoidCallback onAdd,
+    required bool isEmpty,
+    required String empty,
+    required Widget content,
+  }) => Column(
+    children: [
+      Padding(
+        padding: EdgeInsets.fromLTRB(
+          context.pageHorizontalPadding,
+          12,
+          context.pageHorizontalPadding,
+          4,
+        ),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            onPressed: onAdd,
+            icon: Icon(icon),
+            label: Text(label),
+          ),
+        ),
+      ),
+      Expanded(child: isEmpty ? _buildUnavailable(empty) : content),
+    ],
+  );
+
+  Widget _editDeleteMenu({
+    required VoidCallback onEdit,
+    required VoidCallback onDelete,
+  }) => PopupMenuButton<String>(
+    onSelected: (value) => value == 'edit' ? onEdit() : onDelete(),
+    itemBuilder: (_) => const [
+      PopupMenuItem(value: 'edit', child: Text('Modifier')),
+      PopupMenuItem(value: 'delete', child: Text('Supprimer')),
+    ],
+  );
+
+  Future<void> _showSermonEditor([Sermon? existing]) async {
+    final values = <String, String>{
+      'title': existing?.title ?? '',
+      'description': existing?.description ?? '',
+      'author': existing?.author ?? '',
+      'duration': existing?.duration ?? '',
+      'date': existing?.date ?? '',
+      'verse': existing?.verse ?? '',
+      'audioUrl': existing?.audioUrl ?? '',
+    };
+    final result = await _showEditor(
+      title: existing == null ? 'Nouveau sermon' : 'Modifier le sermon',
+      values: values,
+      fields: const [
+        ('title', 'Titre', true),
+        ('author', 'Auteur / pasteur', true),
+        ('description', 'Description', false),
+        ('verse', 'Verset', false),
+        ('duration', 'Durée', false),
+        ('date', 'Date', false),
+        ('audioUrl', 'Fichier audio', true),
+      ],
+      fileFields: const {'audioUrl': _FileInput.audio},
+    );
+    if (result == null) return;
+    final audioUrl = result.files['audioUrl'] == null
+        ? result.values['audioUrl']!
+        : await AppData.uploadAsset(
+            bytes: result.files['audioUrl']!.bytes!,
+            filename: result.files['audioUrl']!.name,
+            categorie: 'sermon',
+          );
+    final sermon = Sermon(
+      id: existing?.id,
+      title: result.values['title']!,
+      description: result.values['description']!,
+      author: result.values['author']!,
+      duration: result.values['duration']!,
+      date: result.values['date']!,
+      verse: result.values['verse']!,
+      audioUrl: audioUrl,
+    );
+    await _runAction(
+      () async => _replaceSermon(
+        existing == null
+            ? await AppData.createSermon(sermon)
+            : await AppData.updateSermon(sermon),
+      ),
+      existing == null ? 'Sermon créé.' : 'Sermon mis à jour.',
+    );
+  }
+
+  Future<void> _showEventEditor([Event? existing]) async {
+    final values = <String, String>{
+      'title': existing?.title ?? '',
+      'description': existing?.description ?? '',
+      'date': existing?.date ?? '',
+      'time': existing?.time ?? '',
+      'location': existing?.location ?? '',
+      'imageUrl': existing?.imageUrl ?? '',
+      'label': existing?.label ?? '',
+    };
+    final result = await _showEditor(
+      title: existing == null ? 'Nouvel événement' : 'Modifier l’événement',
+      values: values,
+      fields: const [
+        ('title', 'Titre', true),
+        ('date', 'Date', true),
+        ('time', 'Heure', false),
+        ('location', 'Lieu', false),
+        ('label', 'Catégorie', false),
+        ('description', 'Description', false),
+        ('imageUrl', 'Image', false),
+      ],
+      fileFields: const {'imageUrl': _FileInput.image},
+    );
+    if (result == null) return;
+    final imageUrl = result.files['imageUrl'] == null
+        ? result.values['imageUrl']!
+        : await AppData.uploadAsset(
+            bytes: result.files['imageUrl']!.bytes!,
+            filename: result.files['imageUrl']!.name,
+            categorie: 'event',
+          );
+    final event = Event(
+      id: existing?.id,
+      title: result.values['title']!,
+      description: result.values['description']!,
+      date: result.values['date']!,
+      time: result.values['time']!,
+      location: result.values['location']!,
+      imageUrl: imageUrl,
+      label: result.values['label']!,
+    );
+    await _runAction(
+      () async => _replaceEvent(
+        existing == null
+            ? await AppData.createEvent(event)
+            : await AppData.updateEvent(event),
+      ),
+      existing == null ? 'Événement créé.' : 'Événement mis à jour.',
+    );
+  }
+
+  Future<_EditorResult?> _showEditor({
+    required String title,
+    required Map<String, String> values,
+    required List<(String, String, bool)> fields,
+    Map<String, _FileInput> fileFields = const {},
+  }) async {
+    final formKey = GlobalKey<FormState>();
+    final controllers = {
+      for (final field in fields)
+        field.$1: TextEditingController(text: values[field.$1]),
+    };
+    final selectedFiles = <String, PlatformFile>{};
+    final result = await showDialog<_EditorResult>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+        title: Text(title),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final field in fields)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: fileFields.containsKey(field.$1)
+                          ? TextFormField(
+                              controller: controllers[field.$1],
+                              readOnly: true,
+                              decoration: InputDecoration(
+                                labelText: field.$2,
+                                border: const OutlineInputBorder(),
+                                suffixIcon: IconButton(
+                                  icon: const Icon(Icons.attach_file),
+                                  tooltip: 'Choisir un fichier',
+                                  onPressed: () async {
+                                    final file = await _pickEditorFile(
+                                      fileFields[field.$1]!,
+                                    );
+                                    if (file == null) return;
+                                    setDialogState(() {
+                                      selectedFiles[field.$1] = file;
+                                      controllers[field.$1]!.text = file.name;
+                                    });
+                                  },
+                                ),
+                              ),
+                              validator: field.$3
+                                  ? (value) => value == null || value.isEmpty
+                                        ? 'Champ obligatoire'
+                                        : null
+                                  : null,
+                            )
+                          : TextFormField(
+                              controller: controllers[field.$1],
+                              maxLines: field.$1 == 'description' ? 3 : 1,
+                              decoration: InputDecoration(
+                                labelText: field.$2,
+                                border: const OutlineInputBorder(),
+                              ),
+                              validator: field.$3
+                                  ? (value) => value == null || value.trim().isEmpty
+                                        ? 'Champ obligatoire'
+                                        : null
+                                  : null,
+                            ),
+                    ),
+                ],
               ),
             ),
-            const SizedBox(height: 2),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(
+                  context,
+                  _EditorResult(
+                    {
+                      for (final entry in controllers.entries)
+                        entry.key: entry.value.text.trim(),
+                    },
+                    selectedFiles,
+                  ),
+                );
+              }
+            },
+            child: const Text('Enregistrer'),
+          ),
+        ],
+        ),
+      ),
+    );
+    for (final controller in controllers.values) {
+      // Small delay to allow the dialog to finish its closing animation
+      // and unmount its widgets before disposing controllers.
+      Future.delayed(const Duration(milliseconds: 300), () => controller.dispose());
+    }
+    return result;
+  }
+
+  Future<PlatformFile?> _pickEditorFile(_FileInput type) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: type == _FileInput.image
+          ? const ['jpg', 'jpeg', 'png', 'webp', 'gif']
+          : const ['mp3', 'wav', 'm4a', 'aac'],
+      withData: true,
+    );
+    final file = result?.files.single;
+    return file?.bytes == null ? null : file;
+  }
+
+  Future<void> _showPhotoActions(GalleryItem photo) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.visibility_outlined),
+              title: const Text('Rendre publique'),
+              onTap: () => Navigator.pop(context, 'public'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.visibility_off_outlined),
+              title: const Text('Rendre privée'),
+              onTap: () => Navigator.pop(context, 'private'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title: const Text('Supprimer'),
+              onTap: () => Navigator.pop(context, 'delete'),
             ),
           ],
         ),
       ),
     );
+    if (!mounted || action == null) return;
+    if (action == 'delete') return _deletePhoto(photo);
+    if (photo.id == null) {
+      return _showMessage('Identifiant de photo manquant.', error: true);
+    }
+    await _runAction(
+      () => AppData.setGalleryVisibility(photo.id!, action == 'public'),
+      action == 'public' ? 'Photo rendue publique.' : 'Photo rendue privée.',
+    );
   }
+
+  Future<void> _uploadPhoto() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+      withData: true,
+    );
+    final file = result?.files.single;
+    final bytes = file?.bytes;
+    if (file == null || bytes == null) return;
+    await _runAction(() async {
+      final photo = await AppData.uploadGalleryItem(
+        bytes: bytes,
+        filename: file.name,
+      );
+      setState(() => _gallery = [photo, ..._gallery]);
+    }, 'Photo téléversée.');
+  }
+
+  Widget _buildUnavailable(String message) => Center(
+    child: Padding(
+      padding: EdgeInsets.all(context.pageHorizontalPadding),
+      child: Text(message, textAlign: TextAlign.center),
+    ),
+  );
+
+  Widget _buildStatCard(String title, int value, IconData icon, Color color) =>
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: color, size: 28),
+              const SizedBox(height: 8),
+              Text(
+                '$value',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(title, textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      );
 }

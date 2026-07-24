@@ -1,5 +1,5 @@
 class Config {
-  static const String baseUrl = 'http://192.168.1.100:8000'; // Remplacez par l'adresse IP de votre serveur
+  static const String baseUrl = 'https://cabcs.onrender.com'; // Remplacez par l'adresse IP de votre serveur
   
   // Auth routes
   static const String loginUrl = '$baseUrl/api/auth/login';
