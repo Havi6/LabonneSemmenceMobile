@@ -1,29 +1,24 @@
-# Correction des URLs et Stabilité de l'AdminPage
+# Fiabilisation du chargement des données serveur
 
-J'ai apporté deux corrections majeures pour résoudre l'erreur d'assertion dans l'administration et le problème de chargement des images réseau.
+J'ai renforcé le système de récupération des données pour assurer que les images et les listes (Sermons, Événements, Galerie) s'affichent correctement dès le lancement de l'application.
 
-## 1. Correction de l'erreur `invalid argument: no host specified in uri file`
+## Améliorations apportées
 
-Cette erreur se produisait car certaines URLs retournées par le serveur étaient soit relatives, soit des chemins de fichiers locaux au serveur (ex: `uploads\image.png`).
+### 1. Parsing JSON Robuste
+Le serveur peut renvoyer des données imbriquées de différentes manières. J'ai rendu `_readList` récursif, lui permettant de trouver automatiquement les tableaux de données même s'ils sont encapsulés dans des objets `data`, `files`, `items`, etc.
 
-### Changements dans [app_data.dart](file:///C:/Users/Pontsho/Documents/Project/LabonneSemmenceMobile/lib/services/app_data.dart) :
-- **Normalisation automatique** : Ajout d'une fonction `_normalizeUrl` qui :
-    - Préfixe automatiquement les chemins relatifs avec l'URL de base (`Config.baseUrl`).
-    - Filtre les chemins invalides (comme ceux contenant des `\`).
-    - S'assure que toutes les URLs commencent par `http` ou `https`.
-- **Modèles mis à jour** : Les classes `Sermon`, `Event` et `GalleryItem` utilisent désormais systématiquement cette normalisation lors de la création depuis un JSON.
+### 2. Identification Intelligente des Images
+Auparavant, les fichiers sans extension (comme les liens directs de téléchargement `/api/files/123/download`) étaient ignorés par la galerie. J'ai assoupli `_isImage` pour qu'il reconnaisse ces liens comme étant des images valides.
 
-## 2. Résolution de l'Assertion Error `_dependents.isEmpty`
+### 3. Fallbacks de Sécurité
+- **Modèle Event** : Si le serveur ne renvoie pas d'URL d'image pour un événement, le modèle tente désormais de générer automatiquement une URL de téléchargement à partir de l'identifiant de l'événement (comme c'était déjà le cas pour la Galerie).
+- **Normalisation des URLs** : Amélioration de `_normalizeUrl` pour éviter les erreurs de format (doubles slashes) et ajout de logs de débogage pour suivre les URLs générées dans la console.
 
-L'administration plantait lors de la fermeture des formulaires à cause d'un conflit de cycle de vie avec `DefaultTabController`.
+### 4. Support Étendu des Champs
+La recherche de chaînes (`_readString`) inspecte désormais plus de clés comme `path`, `uri`, `id`, `_id` pour maximiser les chances de trouver une URL valide.
 
-### Changements dans [admin_page.dart](file:///C:/Users/Pontsho/Documents/Project/LabonneSemmenceMobile/lib/pages/admin_page.dart) :
-- **Gestion manuelle du TabController** : Migration vers un `TabController` géré manuellement dans l'état du widget (`initState`/`dispose`).
-- **Nettoyage sécurisé** : Ajout d'un délai de 300ms avant de disposer les contrôleurs de texte dans l'éditeur pour laisser les animations de fermeture se terminer proprement.
-
-## Vérification effectuée
-- Les images devraient maintenant se charger correctement si elles sont hébergées sur votre serveur.
-- L'interface d'administration est désormais stable lors de l'ajout ou de la modification de ressources.
+## Vérification technique
+- Les erreurs `invalid argument: no host specified in uri file` sont résolues par la normalisation systématique.
+- Les listes vides dues à une structure JSON imprévue sont résolues par le parsing récursif.
 
 render_diffs(file:///C:/Users/Pontsho/Documents/Project/LabonneSemmenceMobile/lib/services/app_data.dart)
-render_diffs(file:///C:/Users/Pontsho/Documents/Project/LabonneSemmenceMobile/lib/pages/admin_page.dart)

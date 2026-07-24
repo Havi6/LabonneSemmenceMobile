@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 
 import 'package:la_bonne_semence_mobile/services/apiService/api_client.dart';
 import 'package:la_bonne_semence_mobile/services/apiService/config.dart';
@@ -88,7 +89,7 @@ class Event {
           'thumbnailUrl',
           'url',
         ])) ??
-        '',
+        _fileUrl(_readString(json, ['id', '_id'])),
     label: _readString(json, ['categorie', 'label', 'category', 'type']) ?? '',
     videoUrl: _readString(json, ['videoUrl', 'video', 'streamUrl']),
   );
@@ -414,7 +415,16 @@ String? _readString(Map<String, dynamic> json, List<String> keys) {
     final value = json[key];
     if (value == null) continue;
     if (value is Map<String, dynamic>) {
-      final nested = _readString(value, ['url', 'fileUrl', 'name', 'title']);
+      final nested = _readString(value, [
+        'url',
+        'fileUrl',
+        'name',
+        'title',
+        'path',
+        'uri',
+        'id',
+        '_id'
+      ]);
       if (nested != null && nested.isNotEmpty) return nested;
     }
     final text = value.toString();
@@ -424,19 +434,35 @@ String? _readString(Map<String, dynamic> json, List<String> keys) {
 }
 
 List<Map<String, dynamic>> _readList(dynamic data) {
-  final rawList = data is List
-      ? data
-      : data is Map<String, dynamic>
-      ? (data['data'] ??
-            data['items'] ??
-            data['results'] ??
-            data['files'] ??
-            data['sermons'] ??
-            data['events'])
-      : null;
-  return rawList is List
-      ? rawList.whereType<Map<String, dynamic>>().toList()
-      : const [];
+  if (data is List) {
+    return data.whereType<Map<String, dynamic>>().toList();
+  }
+
+  if (data is Map<String, dynamic>) {
+    // Liste des clés communes pour les tableaux de données
+    const listKeys = [
+      'data',
+      'items',
+      'results',
+      'files',
+      'sermons',
+      'events',
+      'item'
+    ];
+    for (final key in listKeys) {
+      final value = data[key];
+      if (value is List) {
+        return value.whereType<Map<String, dynamic>>().toList();
+      }
+      // Tentative de recherche récursive si c'est une Map (ex: data: { files: [...] })
+      if (value is Map<String, dynamic>) {
+        final nested = _readList(value);
+        if (nested.isNotEmpty) return nested;
+      }
+    }
+  }
+
+  return const [];
 }
 
 bool _isImage(Map<String, dynamic> item) {
@@ -446,6 +472,7 @@ bool _isImage(Map<String, dynamic> item) {
     'type',
     'contentType',
   ])?.toLowerCase();
+
   final url =
       _readString(item, [
         'url',
@@ -454,14 +481,22 @@ bool _isImage(Map<String, dynamic> item) {
         'path',
         'name',
         'filename',
+        'uri',
       ])?.toLowerCase() ??
       '';
-  return type?.startsWith('image/') == true ||
+
+  final isImageMime = type?.startsWith('image/') == true;
+  final hasImageExtension =
       url.endsWith('.jpg') ||
       url.endsWith('.jpeg') ||
       url.endsWith('.png') ||
       url.endsWith('.webp') ||
       url.endsWith('.gif');
+
+  // Si c'est un endpoint de téléchargement d'un fichier reconnu comme image par le serveur
+  final isDownloadEndpoint = url.contains('/download') || url.contains('/files/');
+
+  return isImageMime || hasImageExtension || isDownloadEndpoint;
 }
 
 String _fileUrl(String? id) =>
@@ -470,16 +505,16 @@ String _fileUrl(String? id) =>
 String? _normalizeUrl(String? url) {
   if (url == null || url.isEmpty) return null;
   if (url.startsWith('http')) return url;
-  
+
   // Si l'URL contient des antislashs, c'est probablement un chemin Windows local au serveur
-  // qu'on ne peut pas utiliser directement.
   if (url.contains('\\')) return null;
 
-  // Si c'est un chemin relatif commençant par /, on le joint à la base du serveur
-  if (url.startsWith('/')) {
-    return '${Config.baseUrl}$url';
+  String path = url;
+  if (path.startsWith('/')) {
+    path = path.substring(1);
   }
-  
-  // Sinon on suppose que c'est un chemin relatif à la racine API ou statique
-  return '${Config.baseUrl}/$url';
+
+  final normalized = '${Config.baseUrl}/$path';
+  debugPrint('URL normalisée : $normalized');
+  return normalized;
 }

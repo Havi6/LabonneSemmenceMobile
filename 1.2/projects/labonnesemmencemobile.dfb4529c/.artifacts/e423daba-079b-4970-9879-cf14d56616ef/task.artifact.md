@@ -5,4 +5,7 @@
 - [x] Verify AdminPage stability
 - [x] Implement `_normalizeUrl` in `app_data.dart`
 - [x] Apply normalization to `Sermon`, `Event`, and `GalleryItem`
-- [x] Verify image loading fix
+- [x] Robustify JSON parsing (`_readList`, `_readString`)
+- [x] Improve `_isImage` detection
+- [x] Add fallback URL for `Event` model
+- [x] Add debug logs for URL normalization
