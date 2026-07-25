@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:la_bonne_semence_mobile/theme/app_colors.dart';
 import 'package:la_bonne_semence_mobile/widget/reveal_item.dart';
 import 'package:la_bonne_semence_mobile/widget/image_viewer.dart';
@@ -17,7 +18,6 @@ class _GaleryPageState extends State<GaleryPage> {
   final PageController _pageController = PageController(viewportFraction: 1.0);
   int _currentPage = 0;
 
-  List<GalleryItem> _galleryItems = const [];
   bool _isLoading = true;
 
   @override
@@ -28,13 +28,8 @@ class _GaleryPageState extends State<GaleryPage> {
 
   Future<void> _loadGallery() async {
     try {
-      final gallery = await AppData.fetchGallery();
-      if (!mounted) return;
-      setState(() {
-        _galleryItems = gallery;
-        _isLoading = false;
-      });
-    } catch (_) {
+      await AppData.fetchGallery();
+    } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -49,6 +44,8 @@ class _GaleryPageState extends State<GaleryPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final appData = context.watch<AppData>();
+    final galleryItems = appData.cachedGallery;
 
     return Scaffold(
       body: Column(
@@ -93,11 +90,11 @@ class _GaleryPageState extends State<GaleryPage> {
           ),
 
           Expanded(
-            child: _isLoading
+            child: (_isLoading && galleryItems.isEmpty)
                 ? const Center(
                     child: CircularProgressIndicator(color: AppColors.primary),
                   )
-                : _galleryItems.isEmpty
+                : galleryItems.isEmpty
                 ? const EmptyStatePlaceholder(
                     icon: Icons.photo_library_outlined,
                     message: 'Aucune photo disponible pour le moment.',
@@ -109,7 +106,7 @@ class _GaleryPageState extends State<GaleryPage> {
                         PageView.builder(
                           scrollDirection: Axis.vertical,
                           controller: _pageController,
-                          itemCount: _galleryItems.length,
+                          itemCount: galleryItems.length,
                           onPageChanged: (int page) {
                             setState(() {
                               _currentPage = page;
@@ -143,8 +140,8 @@ class _GaleryPageState extends State<GaleryPage> {
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => ImageViewer(
-                                        imageUrl: _galleryItems[index].url,
-                                        title: _galleryItems[index].title,
+                                        imageUrl: galleryItems[index].url,
+                                        title: galleryItems[index].title,
                                       ),
                                     ),
                                   );
@@ -170,9 +167,9 @@ class _GaleryPageState extends State<GaleryPage> {
                                       fit: StackFit.expand,
                                       children: [
                                         Hero(
-                                          tag: _galleryItems[index].url,
+                                          tag: galleryItems[index].url,
                                           child: Image.network(
-                                            _galleryItems[index].url,
+                                            galleryItems[index].url,
                                             fit: BoxFit.cover,
                                             loadingBuilder:
                                                 (
@@ -214,7 +211,7 @@ class _GaleryPageState extends State<GaleryPage> {
                                           left: 20,
                                           right: 20,
                                           child: Text(
-                                            _galleryItems[index].title,
+                                            galleryItems[index].title,
                                             style: const TextStyle(
                                               color: Colors.white,
                                               fontSize: 22,
@@ -240,7 +237,7 @@ class _GaleryPageState extends State<GaleryPage> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: List.generate(
-                                _galleryItems.length,
+                                galleryItems.length,
                                 (index) => AnimatedContainer(
                                   duration: const Duration(milliseconds: 300),
                                   margin: const EdgeInsets.symmetric(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:la_bonne_semence_mobile/theme/app_colors.dart';
 import 'package:la_bonne_semence_mobile/widget/reveal_item.dart';
 import 'package:la_bonne_semence_mobile/pages/sermon_player_page.dart';
@@ -13,42 +14,21 @@ class SermonsPage extends StatefulWidget {
 }
 
 class _SermonsPageState extends State<SermonsPage> {
-  late List<Sermon> _filteredSermons;
-  List<Sermon> _sermons = const [];
   final TextEditingController _searchController = TextEditingController();
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _filteredSermons = _sermons;
     _loadSermons();
   }
 
   Future<void> _loadSermons() async {
     try {
-      final sermons = await AppData.fetchSermons();
-      if (!mounted) return;
-      setState(() {
-        _sermons = sermons;
-        _filteredSermons = _sermons;
-        _isLoading = false;
-      });
-    } catch (_) {
+      await AppData.fetchSermons();
+    } finally {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  void _filterSermons(String query) {
-    setState(() {
-      _filteredSermons = _sermons
-          .where(
-            (sermon) =>
-                sermon.title.toLowerCase().contains(query.toLowerCase()) ||
-                sermon.author.toLowerCase().contains(query.toLowerCase()),
-          )
-          .toList();
-    });
   }
 
   @override
@@ -61,6 +41,17 @@ class _SermonsPageState extends State<SermonsPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final appData = context.watch<AppData>();
+    final sermons = appData.cachedSermons;
+
+    final query = _searchController.text.toLowerCase();
+    final filteredSermons = sermons
+        .where(
+          (sermon) =>
+              sermon.title.toLowerCase().contains(query) ||
+              sermon.author.toLowerCase().contains(query),
+        )
+        .toList();
 
     return Scaffold(
       body: Column(
@@ -69,7 +60,7 @@ class _SermonsPageState extends State<SermonsPage> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: TextField(
               controller: _searchController,
-              onChanged: _filterSermons,
+              onChanged: (value) => setState(() {}),
               decoration: InputDecoration(
                 hintText: 'Rechercher un sermon ou un pasteur...',
                 prefixIcon: const Icon(Icons.search, color: AppColors.primary),
@@ -78,7 +69,7 @@ class _SermonsPageState extends State<SermonsPage> {
                         icon: const Icon(Icons.clear),
                         onPressed: () {
                           _searchController.clear();
-                          _filterSermons('');
+                          setState(() {});
                         },
                       )
                     : null,
@@ -95,11 +86,11 @@ class _SermonsPageState extends State<SermonsPage> {
             ),
           ),
           Expanded(
-            child: _isLoading
+            child: (_isLoading && sermons.isEmpty)
                 ? const Center(
                     child: CircularProgressIndicator(color: AppColors.primary),
                   )
-                : _filteredSermons.isEmpty
+                : filteredSermons.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -122,11 +113,11 @@ class _SermonsPageState extends State<SermonsPage> {
                   )
                 : ListView.separated(
                     padding: const EdgeInsets.all(16),
-                    itemCount: _filteredSermons.length,
+                    itemCount: filteredSermons.length,
                     separatorBuilder: (context, index) =>
                         const SizedBox(height: 12),
                     itemBuilder: (context, index) {
-                      final sermon = _filteredSermons[index];
+                      final sermon = filteredSermons[index];
                       return RevealItem(
                         key: ValueKey(sermon.title + sermon.date),
                         delay: Duration(milliseconds: (index % 6) * 100),

@@ -58,8 +58,8 @@ class ApiClient {
     return _send('PUT', url, body: body, authenticated: authenticated);
   }
 
-  Future<void> delete(String url, {bool authenticated = false}) async {
-    await _send('DELETE', url, authenticated: authenticated);
+  Future<dynamic> delete(String url, {bool authenticated = false}) async {
+    return await _send('DELETE', url, authenticated: authenticated);
   }
 
   Future<dynamic> uploadFile(
@@ -183,13 +183,25 @@ class ApiClient {
   String _extractError(dynamic decoded) {
     if (decoded is Map<String, dynamic>) {
       final message =
-          decoded['message'] ?? decoded['error'] ?? decoded['detail'];
+          decoded['message'] ??
+          decoded['error'] ??
+          decoded['detail'] ??
+          decoded['msg'];
       if (message != null) {
+        if (message is List) return message.join(', ');
         return message.toString();
       }
     }
 
-    return 'Une erreur est survenue pendant la requete API.';
+    if (decoded is String && decoded.isNotEmpty) {
+      // Si le serveur renvoie du texte brut (ex: erreur 500 HTML ou texte simple)
+      if (decoded.contains('<!DOCTYPE html>') || decoded.contains('<html>')) {
+        return 'Erreur interne du serveur (HTML).';
+      }
+      return decoded;
+    }
+
+    return 'Une erreur est survenue pendant la requête API.';
   }
 
   MediaType _contentTypeFor(String filename) {

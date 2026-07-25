@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:la_bonne_semence_mobile/theme/app_colors.dart';
 import 'package:la_bonne_semence_mobile/widget/reveal_item.dart';
 import 'package:la_bonne_semence_mobile/widget/empty_state_placeholder.dart';
@@ -14,7 +15,6 @@ class CalendarPage extends StatefulWidget {
 }
 
 class _CalendarPageState extends State<CalendarPage> {
-  List<Event> _events = const [];
   bool _isLoading = true;
 
   String _searchQuery = "";
@@ -35,13 +35,8 @@ class _CalendarPageState extends State<CalendarPage> {
 
   Future<void> _loadEvents() async {
     try {
-      final events = await AppData.fetchEvents();
-      if (!mounted) return;
-      setState(() {
-        _events = events;
-        _isLoading = false;
-      });
-    } catch (_) {
+      await AppData.fetchEvents();
+    } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -50,8 +45,10 @@ class _CalendarPageState extends State<CalendarPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final appData = context.watch<AppData>();
+    final events = appData.cachedEvents;
 
-    final filteredEvents = _events.where((event) {
+    final filteredEvents = events.where((event) {
       final matchesSearch =
           event.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           event.description.toLowerCase().contains(_searchQuery.toLowerCase());
@@ -116,16 +113,16 @@ class _CalendarPageState extends State<CalendarPage> {
 
           // Grid View
           Expanded(
-            child: _isLoading
+            child: (_isLoading && events.isEmpty)
                 ? const Center(
                     child: CircularProgressIndicator(color: AppColors.primary),
                   )
                 : filteredEvents.isEmpty
                 ? EmptyStatePlaceholder(
-                    icon: _events.isEmpty
+                    icon: events.isEmpty
                         ? Icons.event_busy_outlined
                         : Icons.search_off,
-                    message: _events.isEmpty
+                    message: events.isEmpty
                         ? 'Aucun événement disponible pour le moment.'
                         : 'Aucun événement ne correspond à votre recherche.',
                   )

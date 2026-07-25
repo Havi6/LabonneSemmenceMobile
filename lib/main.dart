@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:la_bonne_semence_mobile/theme/app_theme.dart';
 import 'package:la_bonne_semence_mobile/pages/splash_screen.dart';
+import 'package:la_bonne_semence_mobile/services/app_data.dart';
 import 'package:provider/provider.dart';
 
 void main() {
-  runApp(ChangeNotifierProvider(
-      create: (_) => ThemeProvider(),
-      child : const MyApp()
-    )
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => AppData.instance),
+      ],
+      child: const MyApp(),
+    ),
   );
 }
 

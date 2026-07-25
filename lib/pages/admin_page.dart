@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:la_bonne_semence_mobile/services/apiService/api_client.dart';
 import 'package:la_bonne_semence_mobile/services/app_data.dart';
@@ -23,10 +24,8 @@ enum _FileInput { image, audio }
 
 class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  List<Sermon> _sermons = const [];
-  List<Event> _events = const [];
-  List<GalleryItem> _gallery = const [];
   bool _isLoading = true;
+  bool _isActionInProgress = false;
   String? _error;
 
   @override
@@ -48,17 +47,11 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
       _error = null;
     });
     try {
-      final results = await Future.wait([
+      await Future.wait([
         AppData.fetchSermons(forceRefresh: refresh, authenticated: true),
         AppData.fetchEvents(forceRefresh: refresh, authenticated: true),
         AppData.fetchGallery(forceRefresh: refresh, authenticated: true),
       ]);
-      if (!mounted) return;
-      setState(() {
-        _sermons = results[0] as List<Sermon>;
-        _events = results[1] as List<Event>;
-        _gallery = results[2] as List<GalleryItem>;
-      });
     } catch (error) {
       if (mounted) _error = _message(error);
     } finally {
@@ -66,26 +59,10 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     }
   }
 
-  void _replaceSermon(Sermon sermon) => setState(() {
-    final index = _sermons.indexWhere((item) => item.id == sermon.id);
-    _sermons = index == -1 ? [sermon, ..._sermons] : [..._sermons]
-      ..[index] = sermon;
-  });
-
-  void _replaceEvent(Event event) => setState(() {
-    final index = _events.indexWhere((item) => item.id == event.id);
-    _events = index == -1 ? [event, ..._events] : [..._events]
-      ..[index] = event;
-  });
-
   Future<void> _deleteSermon(Sermon sermon) async {
     if (sermon.id == null || !await _confirm('Supprimer ce sermon ?')) return;
     await _runAction(() async {
       await AppData.deleteSermon(sermon.id!);
-      setState(
-        () =>
-            _sermons = _sermons.where((item) => item.id != sermon.id).toList(),
-      );
     }, 'Sermon supprimé.');
   }
 
@@ -95,9 +72,6 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     }
     await _runAction(() async {
       await AppData.deleteEvent(event.id!);
-      setState(
-        () => _events = _events.where((item) => item.id != event.id).toList(),
-      );
     }, 'Événement supprimé.');
   }
 
@@ -105,9 +79,6 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     if (photo.id == null || !await _confirm('Supprimer cette photo ?')) return;
     await _runAction(() async {
       await AppData.deleteGalleryItem(photo.id!);
-      setState(
-        () => _gallery = _gallery.where((item) => item.id != photo.id).toList(),
-      );
     }, 'Photo supprimée.');
   }
 
@@ -135,17 +106,31 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     Future<void> Function() action,
     String success,
   ) async {
+    if (_isActionInProgress) return;
+    setState(() => _isActionInProgress = true);
     try {
       await action();
-      if (mounted) _showMessage(success);
+      final serverMsg = AppData.consumeLastServerMessage();
+      if (mounted) _showMessage(serverMsg ?? success);
     } catch (error) {
+      debugPrint('Admin action error: $error');
       if (mounted) _showMessage(_message(error), error: true);
+    } finally {
+      if (mounted) setState(() => _isActionInProgress = false);
     }
   }
 
-  String _message(Object error) => error is ApiException
-      ? error.message
-      : 'La requête a échoué. Vérifiez votre connexion.';
+  String _message(Object error) {
+    if (error is ApiException) return error.message;
+    final text = error.toString();
+    if (text.contains('Connection refused') || text.contains('Network is unreachable')) {
+      return 'Impossible de contacter le serveur. Vérifiez votre connexion.';
+    }
+    if (text.contains('NoSuchMethodError')) {
+      return 'Erreur de traitement des données serveur.';
+    }
+    return 'Une erreur est survenue. Veuillez réessayer.';
+  }
 
   void _showMessage(String message, {bool error = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -158,6 +143,11 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
+    final appData = context.watch<AppData>();
+    final sermons = appData.cachedSermons;
+    final events = appData.cachedEvents;
+    final gallery = appData.cachedGallery;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -188,27 +178,39 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
           ],
         ),
       ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            )
-          : _error != null
-          ? _buildError()
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildDashboard(),
-                _buildUnavailable(
-                  'Les membres ne sont pas disponibles via le serveur.',
-                ),
-                _buildEvents(),
-                _buildSermons(),
-                _buildGallery(),
-                _buildUnavailable(
-                  'Les dons ne sont pas disponibles via le serveur.',
-                ),
-              ],
+      body: Column(
+        children: [
+          if (_isActionInProgress)
+            const LinearProgressIndicator(
+              color: AppColors.primary,
+              backgroundColor: Colors.transparent,
+              minHeight: 2,
             ),
+          Expanded(
+            child: (_isLoading && sermons.isEmpty)
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.primary),
+                  )
+                : _error != null
+                ? _buildError()
+                : TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildDashboard(sermons.length, events.length, gallery.length),
+                      _buildUnavailable(
+                        'Les membres ne sont pas disponibles via le serveur.',
+                      ),
+                      _buildEvents(events),
+                      _buildSermons(sermons),
+                      _buildGallery(gallery),
+                      _buildUnavailable(
+                        'Les dons ne sont pas disponibles via le serveur.',
+                      ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -236,7 +238,7 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     ),
   );
 
-  Widget _buildDashboard() => SingleChildScrollView(
+  Widget _buildDashboard(int sermonsCount, int eventsCount, int galleryCount) => SingleChildScrollView(
     padding: EdgeInsets.all(context.pageHorizontalPadding),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -264,19 +266,19 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
           children: [
             _buildStatCard(
               'Sermons',
-              _sermons.length,
+              sermonsCount,
               Icons.mic,
               Colors.orange,
             ),
             _buildStatCard(
               'Événements',
-              _events.length,
+              eventsCount,
               Icons.event,
               Colors.green,
             ),
             _buildStatCard(
               'Photos',
-              _gallery.length,
+              galleryCount,
               Icons.photo_library,
               Colors.purple,
             ),
@@ -286,18 +288,18 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     ),
   );
 
-  Widget _buildEvents() => _resourceLayout(
+  Widget _buildEvents(List<Event> events) => _resourceLayout(
     label: 'Ajouter un événement',
     icon: Icons.add,
     onAdd: () => _showEventEditor(),
-    isEmpty: _events.isEmpty,
+    isEmpty: events.isEmpty,
     empty: 'Aucun événement disponible.',
     content: ListView.separated(
       padding: EdgeInsets.all(context.pageHorizontalPadding),
-      itemCount: _events.length,
+      itemCount: events.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (_, index) {
-        final event = _events[index];
+        final event = events[index];
         return Card(
           child: ListTile(
             title: Text(event.title),
@@ -317,18 +319,18 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     ),
   );
 
-  Widget _buildSermons() => _resourceLayout(
+  Widget _buildSermons(List<Sermon> sermons) => _resourceLayout(
     label: 'Ajouter un sermon',
     icon: Icons.add,
     onAdd: () => _showSermonEditor(),
-    isEmpty: _sermons.isEmpty,
+    isEmpty: sermons.isEmpty,
     empty: 'Aucun sermon disponible.',
     content: ListView.separated(
       padding: EdgeInsets.all(context.pageHorizontalPadding),
-      itemCount: _sermons.length,
+      itemCount: sermons.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (_, index) {
-        final sermon = _sermons[index];
+        final sermon = sermons[index];
         return Card(
           child: ListTile(
             leading: const Icon(
@@ -347,11 +349,11 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     ),
   );
 
-  Widget _buildGallery() => _resourceLayout(
+  Widget _buildGallery(List<GalleryItem> gallery) => _resourceLayout(
     label: 'Téléverser une photo',
     icon: Icons.upload_outlined,
     onAdd: _uploadPhoto,
-    isEmpty: _gallery.isEmpty,
+    isEmpty: gallery.isEmpty,
     empty: 'Aucune photo disponible.',
     content: GridView.builder(
       padding: EdgeInsets.all(context.pageHorizontalPadding),
@@ -364,9 +366,9 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
       ),
-      itemCount: _gallery.length,
+      itemCount: gallery.length,
       itemBuilder: (_, index) {
-        final photo = _gallery[index];
+        final photo = gallery[index];
         return InkWell(
           onTap: () => _showPhotoActions(photo),
           child: ClipRRect(
@@ -443,10 +445,10 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
       'title': existing?.title ?? '',
       'description': existing?.description ?? '',
       'author': existing?.author ?? '',
-      'duration': existing?.duration ?? '',
       'date': existing?.date ?? '',
       'verse': existing?.verse ?? '',
       'audioUrl': existing?.audioUrl ?? '',
+      'imageUrl': existing?.imageUrl ?? '',
     };
     final result = await _showEditor(
       title: existing == null ? 'Nouveau sermon' : 'Modifier le sermon',
@@ -456,36 +458,58 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
         ('author', 'Auteur / pasteur', true),
         ('description', 'Description', false),
         ('verse', 'Verset', false),
-        ('duration', 'Durée', false),
         ('date', 'Date', false),
         ('audioUrl', 'Fichier audio', true),
+        ('imageUrl', 'Image de couverture', false),
       ],
-      fileFields: const {'audioUrl': _FileInput.audio},
+      fileFields: const {
+        'audioUrl': _FileInput.audio,
+        'imageUrl': _FileInput.image,
+      },
+      dateFields: const {'date'},
     );
     if (result == null) return;
-    final audioUrl = result.files['audioUrl'] == null
-        ? result.values['audioUrl']!
-        : await AppData.uploadAsset(
-            bytes: result.files['audioUrl']!.bytes!,
-            filename: result.files['audioUrl']!.name,
-            categorie: 'sermon',
-          );
-    final sermon = Sermon(
-      id: existing?.id,
-      title: result.values['title']!,
-      description: result.values['description']!,
-      author: result.values['author']!,
-      duration: result.values['duration']!,
-      date: result.values['date']!,
-      verse: result.values['verse']!,
-      audioUrl: audioUrl,
-    );
     await _runAction(
-      () async => _replaceSermon(
-        existing == null
-            ? await AppData.createSermon(sermon)
-            : await AppData.updateSermon(sermon),
-      ),
+      () async {
+        final audioUrl = result.files['audioUrl'] == null
+            ? result.values['audioUrl']!
+            : await AppData.uploadAsset(
+                bytes: result.files['audioUrl']!.bytes!,
+                filename: result.files['audioUrl']!.name,
+                categorie: 'sermon',
+                additionalFields: {
+                  'titre': result.values['title']!,
+                  'auteur': result.values['author']!,
+                },
+              );
+
+        final imageUrl = result.files['imageUrl'] == null
+            ? result.values['imageUrl']!
+            : await AppData.uploadAsset(
+                bytes: result.files['imageUrl']!.bytes!,
+                filename: result.files['imageUrl']!.name,
+                categorie: 'sermon',
+                additionalFields: {
+                  'usage': 'cover',
+                },
+              );
+
+        final sermon = Sermon(
+          id: existing?.id,
+          title: result.values['title']!,
+          description: result.values['description']!,
+          author: result.values['author']!,
+          duration: '',
+          date: result.values['date']!,
+          verse: result.values['verse']!,
+          audioUrl: audioUrl,
+          imageUrl: imageUrl,
+          imageCaption: '',
+        );
+        await (existing == null
+            ? AppData.createSermon(sermon)
+            : AppData.updateSermon(sermon));
+      },
       existing == null ? 'Sermon créé.' : 'Sermon mis à jour.',
     );
   }
@@ -513,31 +537,36 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
         ('imageUrl', 'Image', false),
       ],
       fileFields: const {'imageUrl': _FileInput.image},
+      dateFields: const {'date'},
+      timeFields: const {'time'},
     );
     if (result == null) return;
-    final imageUrl = result.files['imageUrl'] == null
-        ? result.values['imageUrl']!
-        : await AppData.uploadAsset(
-            bytes: result.files['imageUrl']!.bytes!,
-            filename: result.files['imageUrl']!.name,
-            categorie: 'event',
-          );
-    final event = Event(
-      id: existing?.id,
-      title: result.values['title']!,
-      description: result.values['description']!,
-      date: result.values['date']!,
-      time: result.values['time']!,
-      location: result.values['location']!,
-      imageUrl: imageUrl,
-      label: result.values['label']!,
-    );
     await _runAction(
-      () async => _replaceEvent(
-        existing == null
-            ? await AppData.createEvent(event)
-            : await AppData.updateEvent(event),
-      ),
+      () async {
+        final imageUrl = result.files['imageUrl'] == null
+            ? result.values['imageUrl']!
+            : await AppData.uploadAsset(
+                bytes: result.files['imageUrl']!.bytes!,
+                filename: result.files['imageUrl']!.name,
+                categorie: 'event',
+                additionalFields: {
+                  'titre': result.values['title']!,
+                },
+              );
+        final event = Event(
+          id: existing?.id,
+          title: result.values['title']!,
+          description: result.values['description']!,
+          date: result.values['date']!,
+          time: result.values['time']!,
+          location: result.values['location']!,
+          imageUrl: imageUrl,
+          label: result.values['label']!,
+        );
+        await (existing == null
+            ? AppData.createEvent(event)
+            : AppData.updateEvent(event));
+      },
       existing == null ? 'Événement créé.' : 'Événement mis à jour.',
     );
   }
@@ -547,6 +576,8 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     required Map<String, String> values,
     required List<(String, String, bool)> fields,
     Map<String, _FileInput> fileFields = const {},
+    Set<String> dateFields = const {},
+    Set<String> timeFields = const {},
   }) async {
     final formKey = GlobalKey<FormState>();
     final controllers = {
@@ -558,88 +589,161 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-        title: Text(title),
-        content: SizedBox(
-          width: 420,
-          child: SingleChildScrollView(
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final field in fields)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: fileFields.containsKey(field.$1)
-                          ? TextFormField(
-                              controller: controllers[field.$1],
-                              readOnly: true,
-                              decoration: InputDecoration(
-                                labelText: field.$2,
-                                border: const OutlineInputBorder(),
-                                suffixIcon: IconButton(
-                                  icon: const Icon(Icons.attach_file),
-                                  tooltip: 'Choisir un fichier',
-                                  onPressed: () async {
-                                    final file = await _pickEditorFile(
-                                      fileFields[field.$1]!,
-                                    );
-                                    if (file == null) return;
-                                    setDialogState(() {
-                                      selectedFiles[field.$1] = file;
-                                      controllers[field.$1]!.text = file.name;
-                                    });
-                                  },
+          title: Text(title),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final field in fields)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: fileFields.containsKey(field.$1)
+                            ? TextFormField(
+                                controller: controllers[field.$1],
+                                readOnly: true,
+                                decoration: InputDecoration(
+                                  labelText: field.$2,
+                                  border: const OutlineInputBorder(),
+                                  prefixIcon: Icon(
+                                    fileFields[field.$1] == _FileInput.image
+                                        ? Icons.image_outlined
+                                        : Icons.audio_file_outlined,
+                                  ),
+                                  suffixIcon: IconButton(
+                                    icon: const Icon(Icons.attach_file),
+                                    tooltip: 'Choisir un fichier',
+                                    onPressed: () async {
+                                      final file = await _pickEditorFile(
+                                        fileFields[field.$1]!,
+                                      );
+                                      if (file == null) return;
+                                      setDialogState(() {
+                                        selectedFiles[field.$1] = file;
+                                        controllers[field.$1]!.text = file.name;
+                                      });
+                                    },
+                                  ),
                                 ),
+                                validator: field.$3
+                                    ? (value) =>
+                                        (value == null || value.isEmpty) &&
+                                                !selectedFiles.containsKey(
+                                                  field.$1,
+                                                )
+                                            ? 'Fichier obligatoire'
+                                            : null
+                                    : null,
+                              )
+                            : TextFormField(
+                                controller: controllers[field.$1],
+                                maxLines: field.$1 == 'description' ? 3 : 1,
+                                readOnly:
+                                    dateFields.contains(field.$1) ||
+                                    timeFields.contains(field.$1),
+                                decoration: InputDecoration(
+                                  labelText: field.$2,
+                                  border: const OutlineInputBorder(),
+                                  suffixIcon:
+                                      dateFields.contains(field.$1)
+                                          ? IconButton(
+                                              icon: const Icon(
+                                                Icons.calendar_today,
+                                              ),
+                                              onPressed: () async {
+                                                final date = await showDatePicker(
+                                                  context: context,
+                                                  initialDate: DateTime.now(),
+                                                  firstDate: DateTime(2000),
+                                                  lastDate: DateTime(2100),
+                                                );
+                                                if (date != null) {
+                                                  controllers[field.$1]!.text =
+                                                      "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+                                                }
+                                              },
+                                            )
+                                          : timeFields.contains(field.$1)
+                                          ? IconButton(
+                                              icon: const Icon(Icons.access_time),
+                                              onPressed: () async {
+                                                final time = await showTimePicker(
+                                                  context: context,
+                                                  initialTime: TimeOfDay.now(),
+                                                );
+                                                if (time != null) {
+                                                  controllers[field.$1]!.text =
+                                                      "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}";
+                                                }
+                                              },
+                                            )
+                                          : null,
+                                ),
+                                validator: field.$3
+                                    ? (value) =>
+                                        value == null || value.trim().isEmpty
+                                            ? 'Champ obligatoire'
+                                            : null
+                                    : null,
+                                onTap:
+                                    dateFields.contains(field.$1)
+                                        ? () async {
+                                            final date = await showDatePicker(
+                                              context: context,
+                                              initialDate: DateTime.now(),
+                                              firstDate: DateTime(2000),
+                                              lastDate: DateTime(2100),
+                                            );
+                                            if (date != null) {
+                                              controllers[field.$1]!.text =
+                                                  "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+                                            }
+                                          }
+                                        : timeFields.contains(field.$1)
+                                        ? () async {
+                                            final time = await showTimePicker(
+                                              context: context,
+                                              initialTime: TimeOfDay.now(),
+                                            );
+                                            if (time != null) {
+                                              controllers[field.$1]!.text =
+                                                  "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}";
+                                            }
+                                          }
+                                        : null,
                               ),
-                              validator: field.$3
-                                  ? (value) => value == null || value.isEmpty
-                                        ? 'Champ obligatoire'
-                                        : null
-                                  : null,
-                            )
-                          : TextFormField(
-                              controller: controllers[field.$1],
-                              maxLines: field.$1 == 'description' ? 3 : 1,
-                              decoration: InputDecoration(
-                                labelText: field.$2,
-                                border: const OutlineInputBorder(),
-                              ),
-                              validator: field.$3
-                                  ? (value) => value == null || value.trim().isEmpty
-                                        ? 'Champ obligatoire'
-                                        : null
-                                  : null,
-                            ),
-                    ),
-                ],
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.pop(
-                  context,
-                  _EditorResult(
-                    {
-                      for (final entry in controllers.entries)
-                        entry.key: entry.value.text.trim(),
-                    },
-                    selectedFiles,
-                  ),
-                );
-              }
-            },
-            child: const Text('Enregistrer'),
-          ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  Navigator.pop(
+                    context,
+                    _EditorResult(
+                      {
+                        for (final entry in controllers.entries)
+                          entry.key: entry.value.text.trim(),
+                      },
+                      selectedFiles,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Enregistrer'),
+            ),
+          ],
         ),
       ),
     );
@@ -700,6 +804,34 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
   }
 
   Future<void> _uploadPhoto() async {
+    final legendController = TextEditingController();
+    final legend = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Légende de la photo'),
+        content: TextField(
+          controller: legendController,
+          decoration: const InputDecoration(
+            hintText: 'Entrez une légende (optionnel)',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, legendController.text.trim()),
+            child: const Text('Continuer'),
+          ),
+        ],
+      ),
+    );
+
+    if (legend == null) return;
+
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'gif'],
@@ -709,11 +841,11 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     final bytes = file?.bytes;
     if (file == null || bytes == null) return;
     await _runAction(() async {
-      final photo = await AppData.uploadGalleryItem(
+      await AppData.uploadGalleryItem(
         bytes: bytes,
         filename: file.name,
+        legend: legend,
       );
-      setState(() => _gallery = [photo, ..._gallery]);
     }, 'Photo téléversée.');
   }
 

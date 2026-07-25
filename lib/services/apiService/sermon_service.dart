@@ -1,4 +1,4 @@
-import 'package:la_bonne_semence_mobile/models/sermon.dart';
+import 'package:la_bonne_semence_mobile/models/entities.dart';
 import 'package:la_bonne_semence_mobile/services/apiService/api_client.dart';
 import 'package:la_bonne_semence_mobile/services/apiService/config.dart';
 import 'package:la_bonne_semence_mobile/services/apiService/resource_helpers.dart';

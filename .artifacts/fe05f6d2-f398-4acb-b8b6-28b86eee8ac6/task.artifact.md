@@ -1,0 +1,8 @@
+- [x] Add `_isActionInProgress` state to `_AdminPageState` in `admin_page.dart`
+- [x] Update `_runAction` to manage the progress state and show feedback
+- [x] Add a `LinearProgressIndicator` to the `AdminPage` UI when an action is in progress
+- [x] Refactor `_showSermonEditor` to move `uploadAsset` inside the transactional action block
+- [x] Refactor `_showEventEditor` to move `uploadAsset` inside the transactional action block
+- [x] Update `AppData.uploadAsset` to support additional metadata fields
+- [x] Pass resource metadata (title, author) during file upload to minimize blank records
+- [x] Verify changes and ensure errors are correctly caught and reported

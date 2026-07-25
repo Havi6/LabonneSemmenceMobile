@@ -62,7 +62,7 @@ class _SermonPlayerPageState extends State<SermonPlayerPage> {
   }
 
   void _nextSermon() async {
-    final sermons = AppData.cachedSermons;
+    final sermons = AppData.instance.cachedSermons;
     int index = sermons.indexOf(_currentSermon);
     if (index >= 0 && index < sermons.length - 1) {
       setState(() {
@@ -76,7 +76,7 @@ class _SermonPlayerPageState extends State<SermonPlayerPage> {
   }
 
   void _previousSermon() async {
-    final sermons = AppData.cachedSermons;
+    final sermons = AppData.instance.cachedSermons;
     int index = sermons.indexOf(_currentSermon);
     if (index > 0) {
       setState(() {

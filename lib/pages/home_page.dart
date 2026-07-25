@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:la_bonne_semence_mobile/theme/app_colors.dart';
 import 'package:la_bonne_semence_mobile/widget/reveal_item.dart';
 import 'package:la_bonne_semence_mobile/widget/image_viewer.dart';
@@ -18,9 +19,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  List<Sermon> _recentSermons = const [];
-  List<Event> _recentEvents = const [];
-  List<GalleryItem> _recentGallery = const [];
   bool _isLoading = true;
 
   @override
@@ -31,20 +29,12 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadHomeData() async {
     try {
-      final results = await Future.wait([
+      await Future.wait([
         AppData.fetchSermons(),
         AppData.fetchEvents(),
         AppData.fetchGallery(),
       ]);
-
-      if (!mounted) return;
-      setState(() {
-        _recentSermons = (results[0] as List<Sermon>).take(5).toList();
-        _recentEvents = (results[1] as List<Event>).take(5).toList();
-        _recentGallery = (results[2] as List<GalleryItem>).take(5).toList();
-        _isLoading = false;
-      });
-    } catch (_) {
+    } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -52,13 +42,18 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final appData = context.watch<AppData>();
+    
+    final recentSermons = appData.cachedSermons.take(5).toList();
+    final recentEvents = appData.cachedEvents.take(5).toList();
+    final recentGallery = appData.cachedGallery.take(5).toList();
 
     return Scaffold(
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (_isLoading)
+            if (_isLoading && recentSermons.isEmpty)
               const LinearProgressIndicator(color: AppColors.primary),
 
             // Section Bienvenue
@@ -77,11 +72,11 @@ class _HomePageState extends State<HomePage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildSectionHeader(
-                    "Derniers Enseignements",
+                    "Derniers enseignements",
                     Icons.mic_external_on,
                     1,
                   ),
-                  _buildSermonsCarousel(isDark),
+                  _buildSermonsCarousel(isDark, recentSermons),
                 ],
               ),
             ),
@@ -94,8 +89,8 @@ class _HomePageState extends State<HomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildSectionHeader("Prochains Évènements", Icons.event, 2),
-                  _buildEventsCarousel(isDark),
+                  _buildSectionHeader("Prochains événements", Icons.event, 2),
+                  _buildEventsCarousel(isDark, recentEvents),
                 ],
               ),
             ),
@@ -108,8 +103,8 @@ class _HomePageState extends State<HomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildSectionHeader("Galerie Photos", Icons.photo_library, 3),
-                  _buildGalleryCarousel(isDark),
+                  _buildSectionHeader("Galerie photos", Icons.photo_library, 3),
+                  _buildGalleryCarousel(isDark, recentGallery),
                 ],
               ),
             ),
@@ -155,10 +150,10 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildSermonsCarousel(bool isDark) {
+  Widget _buildSermonsCarousel(bool isDark, List<Sermon> recentSermons) {
     return SizedBox(
       height: context.responsiveValue(mobile: 156.0, tablet: 170.0),
-      child: _recentSermons.isEmpty
+      child: recentSermons.isEmpty
           ? const EmptyStatePlaceholder(
               icon: Icons.mic_off_outlined,
               message: 'Aucun sermon disponible pour le moment.',
@@ -167,9 +162,9 @@ class _HomePageState extends State<HomePage> {
           : ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _recentSermons.length,
+        itemCount: recentSermons.length,
         itemBuilder: (context, index) {
-          final sermon = _recentSermons[index];
+          final sermon = recentSermons[index];
           return GestureDetector(
             onTap: () {
               Navigator.push(
@@ -252,10 +247,10 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildEventsCarousel(bool isDark) {
+  Widget _buildEventsCarousel(bool isDark, List<Event> recentEvents) {
     return SizedBox(
       height: context.responsiveValue(mobile: 190.0, tablet: 210.0),
-      child: _recentEvents.isEmpty
+      child: recentEvents.isEmpty
           ? const EmptyStatePlaceholder(
               icon: Icons.event_busy_outlined,
               message: 'Aucun événement à venir pour le moment.',
@@ -264,9 +259,9 @@ class _HomePageState extends State<HomePage> {
           : ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _recentEvents.length,
+        itemCount: recentEvents.length,
         itemBuilder: (context, index) {
-          final event = _recentEvents[index];
+          final event = recentEvents[index];
           return GestureDetector(
             onTap: () {
               Navigator.push(
@@ -338,10 +333,10 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildGalleryCarousel(bool isDark) {
+  Widget _buildGalleryCarousel(bool isDark, List<GalleryItem> recentGallery) {
     return SizedBox(
       height: context.responsiveValue(mobile: 140.0, tablet: 160.0),
-      child: _recentGallery.isEmpty
+      child: recentGallery.isEmpty
           ? const EmptyStatePlaceholder(
               icon: Icons.photo_library_outlined,
               message: 'Aucune photo disponible pour le moment.',
@@ -350,9 +345,9 @@ class _HomePageState extends State<HomePage> {
           : ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _recentGallery.length,
+        itemCount: recentGallery.length,
         itemBuilder: (context, index) {
-          final photo = _recentGallery[index];
+          final photo = recentGallery[index];
           return GestureDetector(
             onTap: () {
               Navigator.push(
@@ -416,6 +411,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
+
 
 class _WelcomeSection extends StatelessWidget {
   const _WelcomeSection();
