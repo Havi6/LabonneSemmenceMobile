@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:la_bonne_semence_mobile/pages/privacy_policy_page.dart';
+import 'package:la_bonne_semence_mobile/pages/about_developers_page.dart';
 import 'package:la_bonne_semence_mobile/theme/app_colors.dart';
 import 'package:la_bonne_semence_mobile/widget/reveal_item.dart';
 
@@ -45,7 +47,14 @@ class SettingPage extends StatelessWidget {
                 icon: Icons.privacy_tip_outlined,
                 title: "Politique de confidentialité",
                 subtitle: "Consulter nos engagements",
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const PrivacyPolicyPage(),
+                    ),
+                  );
+                },
               ),
             ),
             const SizedBox(height: 16),
@@ -53,10 +62,17 @@ class SettingPage extends StatelessWidget {
               delay: const Duration(milliseconds: 300),
               child: _buildSettingCard(
                 context,
-                icon: Icons.tune_outlined,
-                title: "Préférences",
-                subtitle: "Personnaliser votre expérience",
-                onTap: () {},
+                icon: Icons.code_outlined,
+                title: "À propos des développeurs",
+                subtitle: "Découvrir l'équipe CABCS",
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AboutDevelopersPage(),
+                    ),
+                  );
+                },
               ),
             ),
           ],

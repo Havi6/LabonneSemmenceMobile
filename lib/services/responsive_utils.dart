@@ -7,6 +7,7 @@ extension ResponsiveUtils on BuildContext {
   bool get isMobile => screenWidth < 600;
   bool get isTablet => screenWidth >= 600 && screenWidth < 1200;
   bool get isDesktop => screenWidth >= 1200;
+  bool get isLandscape => screenWidth > screenHeight;
 
   double percentWidth(double percent) => screenWidth * (percent / 100);
   double percentHeight(double percent) => screenHeight * (percent / 100);
@@ -17,11 +18,15 @@ extension ResponsiveUtils on BuildContext {
     desktop: 48.0,
   );
 
+  double get verticalSpacing => isLandscape ? 12.0 : 24.0;
+  double get sectionSpacing => isLandscape ? 16.0 : 32.0;
+
   double get formMaxWidth =>
       responsiveValue(mobile: double.infinity, tablet: 560.0, desktop: 640.0);
 
-  double get bottomNavigationClearance =>
-      responsiveValue(mobile: 104.0, tablet: 116.0, desktop: 124.0);
+  double get bottomNavigationClearance => isLandscape 
+      ? 80.0 
+      : responsiveValue(mobile: 104.0, tablet: 116.0, desktop: 124.0);
 
   // Helper for responsive values
   T responsiveValue<T>({required T mobile, T? tablet, T? desktop}) {

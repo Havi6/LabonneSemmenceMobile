@@ -52,21 +52,21 @@ class _RegisterPageState extends State<RegisterPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SizedBox(height: context.percentHeight(2)),
+                    SizedBox(height: context.isLandscape ? 12 : context.percentHeight(2)),
                     Icon(
                       Icons.person_add_outlined,
                       size: context.responsiveValue(
-                        mobile: 60.0,
+                        mobile: context.isLandscape ? 40.0 : 60.0,
                         tablet: 100.0,
                       ),
                       color: AppColors.primary,
                     ),
-                    const SizedBox(height: 24),
+                    SizedBox(height: context.isLandscape ? 12 : 24),
                     Text(
                       'Créer un compte',
                       style: theme.textTheme.titleLarge?.copyWith(
                         fontSize: context.responsiveValue(
-                          mobile: 24.0,
+                          mobile: context.isLandscape ? 20.0 : 24.0,
                           tablet: 32.0,
                         ),
                       ),
@@ -80,7 +80,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    SizedBox(height: context.percentHeight(4)),
+                    SizedBox(height: context.isLandscape ? 16 : context.percentHeight(4)),
 
                     // Name Field
                     TextFormField(

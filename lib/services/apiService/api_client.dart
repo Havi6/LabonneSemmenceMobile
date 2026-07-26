@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -19,6 +20,12 @@ class ApiClient {
 
   static final ApiClient instance = ApiClient._();
   static String? _accessToken;
+  
+  /// Callback pour rafraîchir la session en cas de 401
+  Future<bool> Function()? onRefreshToken;
+  
+  /// Callback pour notifier d'une déconnexion forcée
+  void Function()? onSessionExpired;
 
   bool get isAuthenticated => _accessToken != null && _accessToken!.isNotEmpty;
 
@@ -93,11 +100,7 @@ class ApiClient {
 
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
-    final decoded = _decode(response.body);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(_extractError(decoded), response.statusCode);
-    }
-    return decoded;
+    return _processResponse(response, 'POST', url);
   }
 
   Future<dynamic> _send(
@@ -112,15 +115,16 @@ class ApiClient {
     };
 
     if (authenticated && !isAuthenticated) {
-      throw const ApiException(
-        'Votre session a expiré. Veuillez vous reconnecter.',
-        401,
-      );
+      // Tentative de refresh automatique avant d'abandonner
+      final refreshed = await _attemptSilentRefresh();
+      if (!refreshed) {
+        throw const ApiException(
+          'Votre session a expiré. Veuillez vous reconnecter.',
+          401,
+        );
+      }
     }
 
-    // Une session active est toujours envoyée, même vers les endpoints publics.
-    // Ainsi, une même ressource peut rester accessible à l'application et à
-    // l'administration sans risquer une requête admin dépourvue de token.
     if (_accessToken != null) {
       headers['Authorization'] = 'Bearer $_accessToken';
     }
@@ -128,43 +132,76 @@ class ApiClient {
     final uri = Uri.parse(url);
     late final http.Response response;
 
+    try {
+      response = await _executeRequest(method, uri, headers, body);
+    } catch (e) {
+      if (e is http.ClientException) {
+        throw const ApiException('Erreur de connexion réseau.');
+      }
+      rethrow;
+    }
+
+    // Gestion du 401 (Unauthorized) pour tenter un refresh silencieux
+    if (response.statusCode == 401 &&
+        authenticated &&
+        !url.contains('/api/auth/refresh')) {
+      final refreshed = await _attemptSilentRefresh();
+      if (refreshed) {
+        // Rejouer la requête avec le nouveau token
+        headers['Authorization'] = 'Bearer $_accessToken';
+        final retryResponse = await _executeRequest(method, uri, headers, body);
+        return _processResponse(retryResponse, method, url);
+      } else {
+        _notifySessionExpired();
+      }
+    }
+
+    return _processResponse(response, method, url);
+  }
+
+  Future<bool> _attemptSilentRefresh() async {
+    if (onRefreshToken == null) return false;
+    try {
+      return await onRefreshToken!();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void _notifySessionExpired() {
+    if (onSessionExpired != null) {
+      onSessionExpired!();
+    }
+  }
+
+  Future<http.Response> _executeRequest(
+    String method,
+    Uri uri,
+    Map<String, String> headers,
+    Map<String, dynamic>? body,
+  ) {
     switch (method) {
       case 'GET':
-        response = await http.get(uri, headers: headers);
-        break;
+        return http.get(uri, headers: headers);
       case 'POST':
-        response = await http.post(
-          uri,
-          headers: headers,
-          body: jsonEncode(body ?? {}),
-        );
-        break;
+        return http.post(uri, headers: headers, body: jsonEncode(body ?? {}));
       case 'PATCH':
-        response = await http.patch(
-          uri,
-          headers: headers,
-          body: jsonEncode(body ?? {}),
-        );
-        break;
+        return http.patch(uri, headers: headers, body: jsonEncode(body ?? {}));
       case 'PUT':
-        response = await http.put(
-          uri,
-          headers: headers,
-          body: jsonEncode(body ?? {}),
-        );
-        break;
+        return http.put(uri, headers: headers, body: jsonEncode(body ?? {}));
       case 'DELETE':
-        response = await http.delete(uri, headers: headers);
-        break;
+        return http.delete(uri, headers: headers);
       default:
         throw ApiException('Methode HTTP non supportee: $method');
     }
+  }
 
+  dynamic _processResponse(http.Response response, String method, String url) {
     final decoded = _decode(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      debugPrint('API Error ($method $url): ${response.statusCode} - ${response.body}');
       throw ApiException(_extractError(decoded), response.statusCode);
     }
-
     return decoded;
   }
 

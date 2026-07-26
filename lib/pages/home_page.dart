@@ -63,7 +63,7 @@ class _HomePageState extends State<HomePage> {
               child: _WelcomeSection(),
             ),
 
-            const SizedBox(height: 24),
+            SizedBox(height: context.verticalSpacing),
 
             // Section Sermons
             RevealItem(
@@ -81,7 +81,7 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
 
-            const SizedBox(height: 24),
+            SizedBox(height: context.verticalSpacing),
 
             // Section Événements
             RevealItem(
@@ -95,7 +95,7 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
 
-            const SizedBox(height: 24),
+            SizedBox(height: context.verticalSpacing),
 
             // Section Galerie
             RevealItem(
@@ -152,7 +152,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildSermonsCarousel(bool isDark, List<Sermon> recentSermons) {
     return SizedBox(
-      height: context.responsiveValue(mobile: 156.0, tablet: 170.0),
+      height: context.isLandscape ? 140.0 : context.responsiveValue(mobile: 156.0, tablet: 170.0),
       child: recentSermons.isEmpty
           ? const EmptyStatePlaceholder(
               icon: Icons.mic_off_outlined,
@@ -249,7 +249,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildEventsCarousel(bool isDark, List<Event> recentEvents) {
     return SizedBox(
-      height: context.responsiveValue(mobile: 190.0, tablet: 210.0),
+      height: context.isLandscape ? 170.0 : context.responsiveValue(mobile: 190.0, tablet: 210.0),
       child: recentEvents.isEmpty
           ? const EmptyStatePlaceholder(
               icon: Icons.event_busy_outlined,
@@ -335,7 +335,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildGalleryCarousel(bool isDark, List<GalleryItem> recentGallery) {
     return SizedBox(
-      height: context.responsiveValue(mobile: 140.0, tablet: 160.0),
+      height: context.isLandscape ? 120.0 : context.responsiveValue(mobile: 140.0, tablet: 160.0),
       child: recentGallery.isEmpty
           ? const EmptyStatePlaceholder(
               icon: Icons.photo_library_outlined,
@@ -419,11 +419,15 @@ class _WelcomeSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final padding = context.isLandscape 
+        ? EdgeInsets.symmetric(horizontal: context.pageHorizontalPadding, vertical: 12)
+        : EdgeInsets.all(context.pageHorizontalPadding);
+
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(context.pageHorizontalPadding),
+      padding: padding,
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.1),
+        color: AppColors.primary.withValues(alpha: 0.1),
         borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(30),
           bottomRight: Radius.circular(30),
@@ -435,7 +439,10 @@ class _WelcomeSection extends StatelessWidget {
           Text(
             "Bienvenue,",
             style: TextStyle(
-              fontSize: context.responsiveValue(mobile: 24.0, tablet: 28.0),
+              fontSize: context.responsiveValue(
+                mobile: context.isLandscape ? 20.0 : 24.0, 
+                tablet: 28.0,
+              ),
               fontWeight: FontWeight.bold,
               color: isDark ? Colors.white : Colors.black87,
             ),
@@ -443,7 +450,10 @@ class _WelcomeSection extends StatelessWidget {
           Text(
             "La Bonne Semence est heureuse de vous retrouver.",
             style: TextStyle(
-              fontSize: context.responsiveValue(mobile: 14.0, tablet: 16.0),
+              fontSize: context.responsiveValue(
+                mobile: context.isLandscape ? 13.0 : 14.0, 
+                tablet: 16.0,
+              ),
               color: AppColors.primary,
               fontWeight: FontWeight.w500,
             ),

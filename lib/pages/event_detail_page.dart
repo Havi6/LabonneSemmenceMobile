@@ -29,7 +29,7 @@ class EventDetailPage extends StatelessWidget {
             leading: Padding(
               padding: const EdgeInsets.all(8.0),
               child: CircleAvatar(
-                backgroundColor: Colors.black.withOpacity(0.5),
+                backgroundColor: Colors.black.withValues(alpha: 0.5),
                 child: IconButton(
                   icon: const Icon(Icons.arrow_back, color: Colors.white),
                   onPressed: () => Navigator.pop(context),
@@ -170,32 +170,56 @@ class EventDetailPage extends StatelessWidget {
                             ),
                           ),
                         ),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () {},
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                          ),
-                          child: const Text(
-                            "S'inscrire / Participer",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
+                      _buildActivityStatus(event),
                     ],
                   ),
                   const SizedBox(height: 100),
                 ],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActivityStatus(Event event) {
+    final eventDate = DateTime.tryParse(event.date);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    
+    // Si la date est aujourd'hui ou dans le futur -> Ouverte
+    // Si la date est avant aujourd'hui -> Fermée
+    final bool isOpen = eventDate == null || !eventDate.isBefore(today);
+    
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      decoration: BoxDecoration(
+        color: isOpen 
+            ? Colors.green.withValues(alpha: 0.1) 
+            : Colors.red.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(
+          color: isOpen ? Colors.green : Colors.red,
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            isOpen ? Icons.check_circle_outline : Icons.lock_clock_outlined,
+            color: isOpen ? Colors.green : Colors.red,
+          ),
+          const SizedBox(width: 12),
+          Text(
+            isOpen ? "ACTIVITÉ OUVERTE" : "ACTIVITÉ FERMÉE",
+            style: TextStyle(
+              color: isOpen ? Colors.green : Colors.red,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              letterSpacing: 1.1,
             ),
           ),
         ],

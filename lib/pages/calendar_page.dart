@@ -53,7 +53,8 @@ class _CalendarPageState extends State<CalendarPage> {
           event.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           event.description.toLowerCase().contains(_searchQuery.toLowerCase());
       final matchesFilter =
-          _selectedFilter == "Tous" || event.label == _selectedFilter;
+          _selectedFilter == "Tous" || 
+          event.label.toLowerCase() == _selectedFilter.toLowerCase();
       return matchesSearch && matchesFilter;
     }).toList();
 
@@ -70,7 +71,7 @@ class _CalendarPageState extends State<CalendarPage> {
                 prefixIcon: const Icon(Icons.search, color: AppColors.primary),
                 filled: true,
                 fillColor: isDark
-                    ? AppColors.surfaceLight.withOpacity(0.2)
+                    ? AppColors.surfaceLight.withValues(alpha: 0.2)
                     : Colors.white,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(30),

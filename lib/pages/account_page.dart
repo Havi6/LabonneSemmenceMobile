@@ -96,54 +96,14 @@ class _ProfileState extends State<Profile> {
                   const SizedBox(height: 30),
                   // Header avec photo de profil
                   Center(
-                    child: Column(
-                      children: [
-                        Stack(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: AppColors.primary,
-                                  width: 2,
-                                ),
-                              ),
-                              child: CircleAvatar(
-                                radius: context.responsiveValue(
-                                  mobile: 40.0,
-                                  tablet: 60.0,
-                                ),
-                                backgroundColor: Colors.transparent,
-                                child: Icon(
-                                  Icons.person,
-                                  size: context.responsiveValue(
-                                    mobile: 60.0,
-                                    tablet: 90.0,
-                                  ),
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              bottom: 0,
-                              right: 0,
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: const BoxDecoration(
-                                  color: AppColors.primary,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.camera_alt,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                    child: CircleAvatar(
+                      radius: context.responsiveValue(mobile: 45.0, tablet: 65.0),
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                      child: Icon(
+                        Icons.person,
+                        size: context.responsiveValue(mobile: 50.0, tablet: 75.0),
+                        color: AppColors.primary,
+                      ),
                     ),
                   ),
 
@@ -156,7 +116,18 @@ class _ProfileState extends State<Profile> {
                       ),
                     )
                   else ...[
-                    _buildSectionHeader("Identité"),
+                    _buildSectionHeader(
+                      "Identité",
+                      action: TextButton.icon(
+                        onPressed: () => _showEditProfileDialog(context),
+                        icon: const Icon(Icons.edit_outlined, size: 18),
+                        label: const Text("Modifier"),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                        ),
+                      ),
+                    ),
                     _buildProfileCard([
                       _buildListTile(
                         "Nom du profil",
@@ -194,12 +165,7 @@ class _ProfileState extends State<Profile> {
                       "Modifier le mot de passe",
                       null,
                       Icons.lock_outline,
-                    ),
-                    _buildListTile(
-                      "Supprimer le compte",
-                      null,
-                      Icons.delete_outline,
-                      isDestructive: true,
+                      onTap: () => _showChangePasswordDialog(context),
                     ),
                   ]),
 
@@ -237,16 +203,22 @@ class _ProfileState extends State<Profile> {
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(String title, {Widget? action}) {
     return Padding(
       padding: const EdgeInsets.only(left: 8, bottom: 8),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: AppColors.primary,
-        ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.primary,
+            ),
+          ),
+          if (action != null) action,
+        ],
       ),
     );
   }
@@ -264,6 +236,7 @@ class _ProfileState extends State<Profile> {
     String? subtitle,
     IconData icon, {
     bool isDestructive = false,
+    VoidCallback? onTap,
   }) {
     return ListTile(
       leading: Icon(
@@ -279,8 +252,227 @@ class _ProfileState extends State<Profile> {
       ),
       subtitle: subtitle != null ? Text(subtitle) : null,
       trailing: const Icon(Icons.arrow_forward_ios, size: 14),
-      onTap: () {},
+      onTap: onTap ?? () {},
     );
+  }
+
+  Future<void> _showChangePasswordDialog(BuildContext context) async {
+    final oldPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool isChanging = false;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text("Modifier le mot de passe"),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: oldPasswordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: "Ancien mot de passe",
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) =>
+                      value == null || value.isEmpty ? "Champ requis" : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: newPasswordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: "Nouveau mot de passe",
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) =>
+                      value == null || value.length < 6
+                          ? "Minimum 6 caractères"
+                          : null,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isChanging ? null : () => Navigator.pop(context),
+              child: const Text("Annuler"),
+            ),
+            FilledButton(
+              onPressed: isChanging
+                  ? null
+                  : () async {
+                      if (formKey.currentState!.validate()) {
+                        setDialogState(() => isChanging = true);
+                        try {
+                          await AuthService.instance.changePassword(
+                            currentPassword: oldPasswordController.text,
+                            newPassword: newPasswordController.text,
+                          );
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Mot de passe modifié avec succès"),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          }
+                        } on ApiException catch (e) {
+                          if (context.mounted) {
+                            setDialogState(() => isChanging = false);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(e.message),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            setDialogState(() => isChanging = false);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Une erreur est survenue"),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        }
+                      }
+                    },
+              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+              child: isChanging
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text("Modifier"),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    // Attendre la fin de l'animation de fermeture avant de libérer les ressources
+    Future.delayed(const Duration(milliseconds: 300), () {
+      oldPasswordController.dispose();
+      newPasswordController.dispose();
+    });
+  }
+
+  Future<void> _showEditProfileDialog(BuildContext context) async {
+    final currentName =
+        _readUser('name') ?? _readUser('username') ?? '';
+    final nameController = TextEditingController(text: currentName);
+    final formKey = GlobalKey<FormState>();
+    bool isUpdating = false;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text("Modifier mon profil"),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: "Nom / Pseudonyme",
+                    border: OutlineInputBorder(),
+                    hintText: "Entrez votre nom",
+                  ),
+                  validator: (value) =>
+                      value == null || value.trim().isEmpty ? "Champ requis" : null,
+                  autofocus: true,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  "L'e-mail ne peut pas être modifié pour des raisons de sécurité.",
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isUpdating ? null : () => Navigator.pop(context),
+              child: const Text("Annuler"),
+            ),
+            FilledButton(
+              onPressed: isUpdating
+                  ? null
+                  : () async {
+                      if (formKey.currentState!.validate()) {
+                        setDialogState(() => isUpdating = true);
+                        try {
+                          await AuthService.instance.updateProfile(
+                            name: nameController.text.trim(),
+                          );
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            _loadProfile(); // Rafraîchir les infos
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Profil mis à jour"),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          }
+                        } on ApiException catch (e) {
+                          if (context.mounted) {
+                            setDialogState(() => isUpdating = false);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(e.message),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        } catch (_) {
+                          if (context.mounted) {
+                            setDialogState(() => isUpdating = false);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Erreur lors de la mise à jour"),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        }
+                      }
+                    },
+              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+              child: isUpdating
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text("Enregistrer"),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    // Attendre la fin de l'animation de fermeture
+    Future.delayed(const Duration(milliseconds: 300), () => nameController.dispose());
   }
 
   Map<String, dynamic>? _unwrapUser(Map<String, dynamic>? data) {

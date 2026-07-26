@@ -50,7 +50,9 @@ class _ContactPageState extends State<ContactPage> {
                   children: [
                     Text(
                       'Contactez-nous',
-                      style: theme.textTheme.titleLarge?.copyWith(fontSize: 28),
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontSize: context.isLandscape ? 22 : 28,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
@@ -58,10 +60,11 @@ class _ContactPageState extends State<ContactPage> {
                       'Une question ou une suggestion ? Écrivez-nous.',
                       style: theme.textTheme.bodyLarge?.copyWith(
                         color: isDark ? Colors.white70 : Colors.black54,
+                        fontSize: context.isLandscape ? 14 : 16,
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 32),
+                    SizedBox(height: context.isLandscape ? 16 : 32),
 
                     // Name Field
                     TextFormField(
@@ -131,12 +134,12 @@ class _ContactPageState extends State<ContactPage> {
                     // Message Field
                     TextFormField(
                       controller: _messageController,
-                      maxLines: 5,
+                      maxLines: context.isLandscape ? 3 : 5,
                       decoration: InputDecoration(
                         labelText: 'Message',
                         alignLabelWithHint: true,
                         prefixIcon: Padding(
-                          padding: const EdgeInsets.only(bottom: 80.0),
+                          padding: EdgeInsets.only(bottom: context.isLandscape ? 40.0 : 80.0),
                           child: const Icon(Icons.message_outlined),
                         ),
                         border: OutlineInputBorder(
@@ -151,7 +154,7 @@ class _ContactPageState extends State<ContactPage> {
                           ? 'Veuillez entrer votre message'
                           : null,
                     ),
-                    const SizedBox(height: 32),
+                    SizedBox(height: context.isLandscape ? 16 : 32),
 
                     // Submit Button
                     ElevatedButton(

@@ -3,8 +3,12 @@ import 'package:flutter/foundation.dart';
 import 'package:la_bonne_semence_mobile/services/apiService/api_client.dart';
 import 'package:la_bonne_semence_mobile/services/apiService/config.dart';
 import 'package:la_bonne_semence_mobile/models/entities.dart';
+import 'package:la_bonne_semence_mobile/models/contact_message.dart';
+import 'package:la_bonne_semence_mobile/models/app_user.dart';
 
 export 'package:la_bonne_semence_mobile/models/entities.dart';
+export 'package:la_bonne_semence_mobile/models/contact_message.dart';
+export 'package:la_bonne_semence_mobile/models/app_user.dart';
 
 class AppData extends ChangeNotifier {
   AppData._();
@@ -15,16 +19,24 @@ class AppData extends ChangeNotifier {
   List<Sermon>? _sermonsCache;
   List<Event>? _eventsCache;
   List<GalleryItem>? _galleryCache;
+  List<ContactMessage>? _contactsCache;
+  List<AppUser>? _usersCache;
   DateTime? _sermonsCachedAt;
   DateTime? _eventsCachedAt;
   DateTime? _galleryCachedAt;
+  DateTime? _contactsCachedAt;
+  DateTime? _usersCachedAt;
   Future<List<Sermon>>? _sermonsRequest;
   Future<List<Event>>? _eventsRequest;
   Future<List<GalleryItem>>? _galleryRequest;
+  Future<List<ContactMessage>>? _contactsRequest;
+  Future<List<AppUser>>? _usersRequest;
 
   List<Sermon> get cachedSermons => _sermonsCache ?? const [];
   List<Event> get cachedEvents => _eventsCache ?? const [];
   List<GalleryItem> get cachedGallery => _galleryCache ?? const [];
+  List<ContactMessage> get cachedContacts => _contactsCache ?? const [];
+  List<AppUser> get cachedUsers => _usersCache ?? const [];
 
   /// Renvoie le dernier message reçu du serveur et le réinitialise.
   static String? consumeLastServerMessage() {
@@ -89,15 +101,51 @@ class AppData extends ChangeNotifier {
     return _galleryRequest ??= _loadGallery(authenticated: authenticated);
   }
 
+  static Future<List<ContactMessage>> fetchContacts({
+    bool forceRefresh = false,
+  }) => instance._fetchContacts(forceRefresh: forceRefresh);
+
+  Future<List<ContactMessage>> _fetchContacts({
+    bool forceRefresh = false,
+  }) {
+    if (!forceRefresh && _contactsCache != null) {
+      if (!_isFresh(_contactsCachedAt)) {
+        _loadContacts();
+      }
+      return Future.value(_contactsCache!);
+    }
+    return _contactsRequest ??= _loadContacts();
+  }
+
+  static Future<List<AppUser>> fetchUsers({
+    bool forceRefresh = false,
+  }) => instance._fetchUsers(forceRefresh: forceRefresh);
+
+  Future<List<AppUser>> _fetchUsers({
+    bool forceRefresh = false,
+  }) {
+    if (!forceRefresh && _usersCache != null) {
+      if (!_isFresh(_usersCachedAt)) {
+        _loadUsers();
+      }
+      return Future.value(_usersCache!);
+    }
+    return _usersRequest ??= _loadUsers();
+  }
+
   static void clearCache() => instance._clearCache();
 
   void _clearCache() {
     _sermonsCache = null;
     _eventsCache = null;
     _galleryCache = null;
+    _contactsCache = null;
+    _usersCache = null;
     _sermonsCachedAt = null;
     _eventsCachedAt = null;
     _galleryCachedAt = null;
+    _contactsCachedAt = null;
+    _usersCachedAt = null;
     notifyListeners();
   }
 
@@ -200,6 +248,73 @@ class AppData extends ChangeNotifier {
     _galleryCachedAt = DateTime.now();
     notifyListeners();
     _loadGallery(authenticated: true);
+  }
+
+  static Future<void> deleteContact(String id) => instance._deleteContact(id);
+
+  Future<void> _deleteContact(String id) async {
+    final data = await ApiClient.instance.delete(
+      '${Config.contactsUrl}/${Uri.encodeComponent(id)}',
+      authenticated: true,
+    );
+    _readEntity(data);
+    _contactsCache = _contactsCache?.where((item) => item.id != id).toList();
+    _contactsCachedAt = DateTime.now();
+    notifyListeners();
+    _loadContacts();
+  }
+
+  static Future<AppUser> createUser(AppUser user, String password) =>
+      instance._createUser(user, password);
+
+  Future<AppUser> _createUser(AppUser user, String password) async {
+    final data = await ApiClient.instance.post(
+      Config.usersUrl,
+      {...user.toJson(), 'password': password},
+      authenticated: true,
+    );
+    final created = AppUser.fromJson(_readEntity(data));
+    if (_usersCache != null) {
+      _usersCache = [created, ..._usersCache!];
+      notifyListeners();
+    }
+    _loadUsers();
+    return created;
+  }
+
+  static Future<AppUser> updateUser(AppUser user) => instance._updateUser(user);
+
+  Future<AppUser> _updateUser(AppUser user) async {
+    final id = _requiredId(user.id, 'cet utilisateur');
+    final data = await ApiClient.instance.put(
+      '${Config.usersUrl}/${Uri.encodeComponent(id)}',
+      user.toJson(),
+      authenticated: true,
+    );
+    final updated = AppUser.fromJson(_readEntity(data));
+    if (_usersCache != null) {
+      final index = _usersCache!.indexWhere((u) => u.id == user.id);
+      if (index != -1) {
+        _usersCache![index] = updated;
+        notifyListeners();
+      }
+    }
+    _loadUsers();
+    return updated;
+  }
+
+  static Future<void> deleteUser(String id) => instance._deleteUser(id);
+
+  Future<void> _deleteUser(String id) async {
+    final data = await ApiClient.instance.delete(
+      '${Config.usersUrl}/${Uri.encodeComponent(id)}',
+      authenticated: true,
+    );
+    _readEntity(data);
+    _usersCache = _usersCache?.where((item) => item.id != id).toList();
+    _usersCachedAt = DateTime.now();
+    notifyListeners();
+    _loadUsers();
   }
 
   static Future<GalleryItem> uploadGalleryItem({
@@ -370,6 +485,38 @@ class AppData extends ChangeNotifier {
       return gallery;
     } finally {
       _galleryRequest = null;
+    }
+  }
+
+  Future<List<ContactMessage>> _loadContacts() async {
+    try {
+      final data = await ApiClient.instance.get(
+        Config.contactsUrl,
+        authenticated: true,
+      );
+      final contacts = _readList(data).map(ContactMessage.fromJson).toList();
+      _contactsCache = contacts;
+      _contactsCachedAt = DateTime.now();
+      notifyListeners();
+      return contacts;
+    } finally {
+      _contactsRequest = null;
+    }
+  }
+
+  Future<List<AppUser>> _loadUsers() async {
+    try {
+      final data = await ApiClient.instance.get(
+        Config.usersUrl,
+        authenticated: true,
+      );
+      final users = _readList(data).map(AppUser.fromJson).toList();
+      _usersCache = users;
+      _usersCachedAt = DateTime.now();
+      notifyListeners();
+      return users;
+    } finally {
+      _usersRequest = null;
     }
   }
 

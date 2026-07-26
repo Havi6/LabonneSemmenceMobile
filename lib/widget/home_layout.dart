@@ -1,14 +1,16 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:la_bonne_semence_mobile/pages/about_us_page.dart';
 import 'package:la_bonne_semence_mobile/pages/account_page.dart';
 import 'package:la_bonne_semence_mobile/pages/admin_page.dart';
 import 'package:la_bonne_semence_mobile/pages/calendar_page.dart';
 import 'package:la_bonne_semence_mobile/pages/contact_page.dart';
-import 'package:la_bonne_semence_mobile/pages/donnation_page.dart';
 import 'package:la_bonne_semence_mobile/pages/galery_page.dart';
 import 'package:la_bonne_semence_mobile/pages/home_page.dart';
+import 'package:la_bonne_semence_mobile/pages/login_page.dart';
 import 'package:la_bonne_semence_mobile/pages/sermons_page.dart';
 import 'package:la_bonne_semence_mobile/pages/setting_page.dart';
+import 'package:la_bonne_semence_mobile/services/apiService/auth_service.dart';
 import 'package:la_bonne_semence_mobile/services/responsive_utils.dart';
 import 'package:la_bonne_semence_mobile/theme/app_theme.dart';
 import 'package:provider/provider.dart';
@@ -27,16 +29,41 @@ class _HomeLayoutState extends State<HomeLayout> {
   int _currentIndex = 0;
   int? _selectedDrawerIndex;
   bool _isDisplayingDrawerPage = false;
+  Timer? _heartbeatTimer;
 
   late final List<Widget> _bottomPages;
 
-  final List<Widget> _drawerPages = const [
-    DonnationPage(),
-    ContactPage(),
-    AboutUsPage(),
-    Profile(),
-    SettingPage(),
-    AdminPage(),
+  List<({IconData icon, IconData selectedIcon, String label, Widget page})> _getDrawerItems() => [
+    (
+      icon: Icons.admin_panel_settings_outlined,
+      selectedIcon: Icons.admin_panel_settings,
+      label: 'Admin',
+      page: const AdminPage(),
+    ),
+    (
+      icon: Icons.account_circle_outlined,
+      selectedIcon: Icons.account_circle,
+      label: 'Compte',
+      page: const Profile(),
+    ),
+    (
+      icon: Icons.settings_outlined,
+      selectedIcon: Icons.settings,
+      label: 'Paramètres',
+      page: const SettingPage(),
+    ),
+    (
+      icon: Icons.contact_support_outlined,
+      selectedIcon: Icons.contact_support,
+      label: 'Contact',
+      page: const ContactPage(),
+    ),
+    (
+      icon: Icons.info_outline,
+      selectedIcon: Icons.info,
+      label: 'À propos',
+      page: const AboutUsPage(),
+    ),
   ];
 
   void _onNavigate(int index) {
@@ -56,18 +83,65 @@ class _HomeLayoutState extends State<HomeLayout> {
       const CalendarPage(),
       const GaleryPage(),
     ];
+
+    // Initialiser le heartbeat
+    _startHeartbeat();
+
+    // Écouter l'expiration de session
+    AuthService.instance.sessionExpiredNotifier.addListener(_handleSessionExpired);
+  }
+
+  @override
+  void dispose() {
+    _heartbeatTimer?.cancel();
+    AuthService.instance.sessionExpiredNotifier.removeListener(_handleSessionExpired);
+    super.dispose();
+  }
+
+  void _startHeartbeat() {
+    // Premier heartbeat après 30 secondes, puis toutes les 5 minutes
+    Timer(const Duration(seconds: 30), () {
+      if (mounted) {
+        AuthService.instance.heartbeat();
+        _heartbeatTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
+          AuthService.instance.heartbeat();
+        });
+      }
+    });
+  }
+
+  void _handleSessionExpired() {
+    if (AuthService.instance.sessionExpiredNotifier.value && mounted) {
+      // Réinitialiser le notifier pour éviter des boucles si on revient plus tard
+      AuthService.instance.sessionExpiredNotifier.value = false;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Votre session a expiré. Veuillez vous reconnecter.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+        (route) => false,
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final drawerItems = _getDrawerItems();
+    
     final currentBody = _isDisplayingDrawerPage
-        ? _drawerPages[_selectedDrawerIndex ?? 0]
+        ? drawerItems[_selectedDrawerIndex ?? 0].page
         : _bottomPages[_currentIndex];
 
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: context.isLandscape ? 48.0 : kToolbarHeight,
         backgroundColor: isDark
             ? AppColors.backgroundDark
             : AppColors.backgroundLight,
@@ -89,7 +163,10 @@ class _HomeLayoutState extends State<HomeLayout> {
           ],
         ),
       ),
-      drawer: _buildDrawer(context, isDark, themeProvider),
+      drawer: ValueListenableBuilder<String?>(
+        valueListenable: AuthService.instance.userRoleNotifier,
+        builder: (context, role, child) => _buildDrawer(context, isDark, themeProvider),
+      ),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 500),
         transitionBuilder: (child, animation) => FadeTransition(
@@ -123,35 +200,15 @@ class _HomeLayoutState extends State<HomeLayout> {
     bool isDark,
     ThemeProvider themeProvider,
   ) {
-    final textColor = isDark ? Colors.white : AppColors.textPrimary;
-    final items = <({IconData icon, IconData selectedIcon, String label})>[
-      (
-        icon: Icons.volunteer_activism_outlined,
-        selectedIcon: Icons.volunteer_activism,
-        label: 'Dons',
-      ),
-      (
-        icon: Icons.contact_support_outlined,
-        selectedIcon: Icons.contact_support,
-        label: 'Contact',
-      ),
-      (icon: Icons.info_outline, selectedIcon: Icons.info, label: 'À propos'),
-      (
-        icon: Icons.account_circle_outlined,
-        selectedIcon: Icons.account_circle,
-        label: 'Compte',
-      ),
-      (
-        icon: Icons.settings_outlined,
-        selectedIcon: Icons.settings,
-        label: 'Paramètres',
-      ),
-      (
-        icon: Icons.admin_panel_settings_outlined,
-        selectedIcon: Icons.admin_panel_settings,
-        label: 'Admin',
-      ),
-    ];
+    final textColor = isDark ? Colors.white : Colors.black;
+    final isAdmin = AuthService.instance.isAdmin;
+    final allItems = _getDrawerItems();
+
+    // Filtrer les éléments selon le rôle
+    final items = allItems.where((item) {
+      if (item.label == 'Admin' && !isAdmin) return false;
+      return true;
+    }).toList();
 
     return Drawer(
       child: SafeArea(
@@ -161,7 +218,18 @@ class _HomeLayoutState extends State<HomeLayout> {
               padding: const EdgeInsets.fromLTRB(24, 20, 16, 16),
               child: Row(
                 children: [
-                  const Icon(Icons.church_outlined, color: AppColors.primary),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2C3E50),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.church_outlined,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -173,13 +241,19 @@ class _HomeLayoutState extends State<HomeLayout> {
                       ),
                     ),
                   ),
-                  IconButton(
-                    tooltip: isDark
-                        ? 'Activer le thème clair'
-                        : 'Activer le thème sombre',
-                    icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
-                    color: AppColors.primary,
-                    onPressed: () => themeProvider.toggleTheme(!isDark),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2C3E50),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: IconButton(
+                      tooltip: isDark
+                          ? 'Activer le thème clair'
+                          : 'Activer le thème sombre',
+                      icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+                      color: AppColors.primary,
+                      onPressed: () => themeProvider.toggleTheme(!isDark),
+                    ),
                   ),
                 ],
               ),
@@ -187,24 +261,59 @@ class _HomeLayoutState extends State<HomeLayout> {
             const Divider(height: 1),
             Expanded(
               child: ListView.builder(
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                 itemCount: items.length,
                 itemBuilder: (context, index) {
                   final item = items[index];
-                  final isSelected =
-                      _isDisplayingDrawerPage && _selectedDrawerIndex == index;
-                  return ListTile(
-                    leading: Icon(isSelected ? item.selectedIcon : item.icon),
-                    title: Text(item.label),
-                    selected: isSelected,
-                    selectedColor: AppColors.primary,
-                    onTap: () {
-                      setState(() {
-                        _selectedDrawerIndex = index;
-                        _isDisplayingDrawerPage = true;
-                      });
-                      Navigator.of(context).pop();
-                    },
+                  // Déterminer si cette page est actuellement affichée
+                  // On compare les labels pour plus de robustesse
+                  final isSelected = _isDisplayingDrawerPage && 
+                      _selectedDrawerIndex != null &&
+                      _selectedDrawerIndex! < allItems.length &&
+                      allItems[_selectedDrawerIndex!].label == item.label;
+
+                  // Couleur selon les nouvelles règles :
+                  // Sélectionné : AppColors.primary (doré)
+                  // Non sélectionné : blanc en dark mode, noir en white mode
+                  final itemColor = isSelected
+                      ? AppColors.primary
+                      : (isDark ? Colors.white : Colors.black);
+
+                  // Fond de l'élément sélectionné :
+                  // Mode clair : Gris anthracite (#2C3E50)
+                  // Mode sombre : Doré très léger (alpha 0.12)
+                  final selectedBgColor = isDark
+                      ? AppColors.primary.withValues(alpha: 0.12)
+                      : const Color(0xFF2C3E50);
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: ListTile(
+                      leading: Icon(
+                        isSelected ? item.selectedIcon : item.icon,
+                        color: isSelected ? itemColor : (isDark ? Colors.white70 : Colors.black54),
+                      ),
+                      title: Text(
+                        item.label,
+                        style: TextStyle(
+                          color: itemColor,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                      selected: isSelected,
+                      selectedTileColor: selectedBgColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      onTap: () {
+                        setState(() {
+                          // On cherche l'index global dans allItems pour la navigation
+                          _selectedDrawerIndex = allItems.indexWhere((ai) => ai.label == item.label);
+                          _isDisplayingDrawerPage = true;
+                        });
+                        Navigator.of(context).pop();
+                      },
+                    ),
                   );
                 },
               ),
@@ -217,13 +326,17 @@ class _HomeLayoutState extends State<HomeLayout> {
 
   Widget _buildBottomNavigation(BuildContext context, bool isDark) {
     final horizontalMargin = context.screenWidth < 360 ? 8.0 : 20.0;
+    final bottomMargin = context.isLandscape 
+        ? 8.0 
+        : context.responsiveValue(mobile: 24.0, tablet: 32.0);
+
     return Container(
       constraints: const BoxConstraints(maxWidth: 600),
       margin: EdgeInsets.fromLTRB(
         horizontalMargin,
         0,
         horizontalMargin,
-        context.responsiveValue(mobile: 24.0, tablet: 32.0),
+        bottomMargin,
       ),
       decoration: BoxDecoration(
         color: isDark ? AppColors.backgroundDark : Colors.white,

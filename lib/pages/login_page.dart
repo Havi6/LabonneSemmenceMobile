@@ -48,22 +48,22 @@ class _LoginPageState extends State<LoginPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SizedBox(height: context.percentHeight(5)),
+                    SizedBox(height: context.isLandscape ? 12 : context.percentHeight(5)),
                     // Logo or Icon
                     Icon(
                       Icons.lock_outline,
                       size: context.responsiveValue(
-                        mobile: 60.0,
+                        mobile: context.isLandscape ? 40.0 : 60.0,
                         tablet: 100.0,
                       ),
                       color: AppColors.primary,
                     ),
-                    const SizedBox(height: 24),
+                    SizedBox(height: context.isLandscape ? 12 : 24),
                     Text(
                       'Bienvenue',
                       style: theme.textTheme.titleLarge?.copyWith(
                         fontSize: context.responsiveValue(
-                          mobile: 24.0,
+                          mobile: context.isLandscape ? 20.0 : 24.0,
                           tablet: 32.0,
                         ),
                       ),
@@ -77,7 +77,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    SizedBox(height: context.percentHeight(5)),
+                    SizedBox(height: context.isLandscape ? 16 : context.percentHeight(5)),
 
                     // Email Field
                     TextFormField(

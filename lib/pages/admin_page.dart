@@ -51,6 +51,8 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
         AppData.fetchSermons(forceRefresh: refresh, authenticated: true),
         AppData.fetchEvents(forceRefresh: refresh, authenticated: true),
         AppData.fetchGallery(forceRefresh: refresh, authenticated: true),
+        AppData.fetchContacts(forceRefresh: refresh),
+        AppData.fetchUsers(forceRefresh: refresh),
       ]);
     } catch (error) {
       if (mounted) _error = _message(error);
@@ -80,6 +82,22 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     await _runAction(() async {
       await AppData.deleteGalleryItem(photo.id!);
     }, 'Photo supprimée.');
+  }
+
+  Future<void> _deleteContact(ContactMessage contact) async {
+    if (!await _confirm('Supprimer ce message de contact ?')) return;
+    await _runAction(() async {
+      await AppData.deleteContact(contact.id);
+    }, 'Message supprimé.');
+  }
+
+  Future<void> _deleteUser(AppUser user) async {
+    if (user.id == null || !await _confirm('Supprimer cet utilisateur ?')) {
+      return;
+    }
+    await _runAction(() async {
+      await AppData.deleteUser(user.id!);
+    }, 'Utilisateur supprimé.');
   }
 
   Future<bool> _confirm(String message) async =>
@@ -147,6 +165,8 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     final sermons = appData.cachedSermons;
     final events = appData.cachedEvents;
     final gallery = appData.cachedGallery;
+    final contacts = appData.cachedContacts;
+    final users = appData.cachedUsers;
 
     return Scaffold(
       appBar: AppBar(
@@ -174,7 +194,7 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
             Tab(icon: Icon(Icons.event_note_outlined), text: 'Événements'),
             Tab(icon: Icon(Icons.mic_none_outlined), text: 'Sermons'),
             Tab(icon: Icon(Icons.photo_library_outlined), text: 'Galerie'),
-            Tab(icon: Icon(Icons.volunteer_activism_outlined), text: 'Dons'),
+            Tab(icon: Icon(Icons.contact_mail_outlined), text: 'Contacts'),
           ],
         ),
       ),
@@ -196,16 +216,18 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
                 : TabBarView(
                     controller: _tabController,
                     children: [
-                      _buildDashboard(sermons.length, events.length, gallery.length),
-                      _buildUnavailable(
-                        'Les membres ne sont pas disponibles via le serveur.',
+                      _buildDashboard(
+                        sermons.length,
+                        events.length,
+                        gallery.length,
+                        contacts.length,
+                        users.length,
                       ),
+                      _buildMembers(users),
                       _buildEvents(events),
                       _buildSermons(sermons),
                       _buildGallery(gallery),
-                      _buildUnavailable(
-                        'Les dons ne sont pas disponibles via le serveur.',
-                      ),
+                      _buildContacts(contacts),
                     ],
                   ),
           ),
@@ -238,7 +260,13 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     ),
   );
 
-  Widget _buildDashboard(int sermonsCount, int eventsCount, int galleryCount) => SingleChildScrollView(
+  Widget _buildDashboard(
+    int sermonsCount,
+    int eventsCount,
+    int galleryCount,
+    int contactsCount,
+    int usersCount,
+  ) => SingleChildScrollView(
     padding: EdgeInsets.all(context.pageHorizontalPadding),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -254,7 +282,7 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
           crossAxisCount: context.responsiveValue(
             mobile: context.screenWidth < 360 ? 1 : 2,
             tablet: 3,
-            desktop: 3,
+            desktop: 5,
           ),
           crossAxisSpacing: 15,
           mainAxisSpacing: 15,
@@ -281,6 +309,18 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
               galleryCount,
               Icons.photo_library,
               Colors.purple,
+            ),
+            _buildStatCard(
+              'Membres',
+              usersCount,
+              Icons.people,
+              Colors.teal,
+            ),
+            _buildStatCard(
+              'Contacts',
+              contactsCount,
+              Icons.contact_mail,
+              Colors.blue,
             ),
           ],
         ),
@@ -399,6 +439,89 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
       },
     ),
   );
+
+  Widget _buildMembers(List<AppUser> users) => _resourceLayout(
+    label: 'Ajouter un membre',
+    icon: Icons.person_add_outlined,
+    onAdd: () => _showUserEditor(),
+    isEmpty: users.isEmpty,
+    empty: 'Aucun membre enregistré.',
+    content: ListView.separated(
+      padding: EdgeInsets.all(context.pageHorizontalPadding),
+      itemCount: users.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemBuilder: (_, index) {
+        final user = users[index];
+        return Card(
+          child: ListTile(
+            leading: const CircleAvatar(
+              backgroundColor: AppColors.primary,
+              child: Icon(Icons.person, color: Colors.white),
+            ),
+            title: Text(user.name),
+            subtitle: Text('${user.email} • ${user.role ?? 'user'}'),
+            trailing: _editDeleteMenu(
+              onEdit: () => _showUserEditor(user),
+              onDelete: () => _deleteUser(user),
+            ),
+          ),
+        );
+      },
+    ),
+  );
+
+  Widget _buildContacts(List<ContactMessage> contacts) => isEmpty(contacts)
+      ? _buildUnavailable('Aucun message de contact.')
+      : ListView.separated(
+          padding: EdgeInsets.all(context.pageHorizontalPadding),
+          itemCount: contacts.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          itemBuilder: (_, index) {
+            final contact = contacts[index];
+            return Card(
+              child: ExpansionTile(
+                leading: const CircleAvatar(
+                  backgroundColor: AppColors.primary,
+                  child: Icon(Icons.person, color: Colors.white),
+                ),
+                title: Text(contact.nom),
+                subtitle: Text(contact.email),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: () => _deleteContact(contact),
+                ),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Sujet: ${contact.sujet}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(contact.contenu),
+                        if (contact.createdAt != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Reçu le: ${contact.createdAt!.day}/${contact.createdAt!.month}/${contact.createdAt!.year}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+
+  bool isEmpty(List list) => list.isEmpty;
 
   Widget _resourceLayout({
     required String label,
@@ -539,6 +662,9 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
       fileFields: const {'imageUrl': _FileInput.image},
       dateFields: const {'date'},
       timeFields: const {'time'},
+      dropdownFields: const {
+        'label': ['Jeunesse', 'Culte', 'Prière', 'Social'],
+      },
     );
     if (result == null) return;
     await _runAction(
@@ -571,6 +697,45 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     );
   }
 
+  Future<void> _showUserEditor([AppUser? existing]) async {
+    final values = <String, String>{
+      'name': existing?.name ?? '',
+      'email': existing?.email ?? '',
+      'role': existing?.role ?? 'user',
+      'password': '',
+    };
+    final result = await _showEditor(
+      title: existing == null ? 'Nouveau membre' : 'Modifier le membre',
+      values: values,
+      fields: [
+        ('name', 'Nom complet', true),
+        ('email', 'Adresse e-mail', true),
+        ('role', 'Rôle', true),
+        if (existing == null) ('password', 'Mot de passe', true),
+      ],
+      dropdownFields: const {
+        'role': ['admin', 'user'],
+      },
+    );
+    if (result == null) return;
+    await _runAction(
+      () async {
+        final user = AppUser(
+          id: existing?.id,
+          name: result.values['name']!,
+          email: result.values['email']!,
+          role: result.values['role'],
+        );
+        if (existing == null) {
+          await AppData.createUser(user, result.values['password']!);
+        } else {
+          await AppData.updateUser(user);
+        }
+      },
+      existing == null ? 'Membre créé.' : 'Membre mis à jour.',
+    );
+  }
+
   Future<_EditorResult?> _showEditor({
     required String title,
     required Map<String, String> values,
@@ -578,6 +743,7 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     Map<String, _FileInput> fileFields = const {},
     Set<String> dateFields = const {},
     Set<String> timeFields = const {},
+    Map<String, List<String>> dropdownFields = const {},
   }) async {
     final formKey = GlobalKey<FormState>();
     final controllers = {
@@ -587,11 +753,15 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     final selectedFiles = <String, PlatformFile>{};
     final result = await showDialog<_EditorResult>(
       context: context,
+      barrierDismissible: false,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: Text(title),
-          content: SizedBox(
+          content: Container(
             width: 420,
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.7,
+            ),
             child: SingleChildScrollView(
               child: Form(
                 key: formKey,
@@ -601,7 +771,42 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
                     for (final field in fields)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 10),
-                        child: fileFields.containsKey(field.$1)
+                        child: dropdownFields.containsKey(field.$1)
+                            ? DropdownButtonFormField<String>(
+                                initialValue: dropdownFields[field.$1]!.contains(
+                                  controllers[field.$1]!.text,
+                                )
+                                    ? controllers[field.$1]!.text
+                                    : null,
+                                decoration: InputDecoration(
+                                  labelText: field.$2,
+                                  border: const OutlineInputBorder(),
+                                ),
+                                items:
+                                    dropdownFields[field.$1]!
+                                        .map(
+                                          (opt) => DropdownMenuItem(
+                                            value: opt,
+                                            child: Text(opt),
+                                          ),
+                                        )
+                                        .toList(),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setDialogState(() {
+                                      controllers[field.$1]!.text = val;
+                                    });
+                                  }
+                                },
+                                validator:
+                                    field.$3
+                                        ? (value) =>
+                                            value == null || value.isEmpty
+                                                ? 'Champ obligatoire'
+                                                : null
+                                        : null,
+                              )
+                            : fileFields.containsKey(field.$1)
                             ? TextFormField(
                                 controller: controllers[field.$1],
                                 readOnly: true,
@@ -830,7 +1035,10 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
       ),
     );
 
-    if (legend == null) return;
+    if (legend == null) {
+      legendController.dispose();
+      return;
+    }
 
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -839,6 +1047,10 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     );
     final file = result?.files.single;
     final bytes = file?.bytes;
+
+    // Attendre un peu avant de libérer le controller car le dialogue vient de se fermer
+    Future.delayed(const Duration(milliseconds: 300), () => legendController.dispose());
+
     if (file == null || bytes == null) return;
     await _runAction(() async {
       await AppData.uploadGalleryItem(

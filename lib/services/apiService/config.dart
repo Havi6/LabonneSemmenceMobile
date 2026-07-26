@@ -16,6 +16,7 @@ class Config {
   static const String postsUrl = '$baseUrl/api/posts';
   static const String filesUrl = '$baseUrl/api/files';
   static const String contactsUrl = '$baseUrl/api/contacts';
+  static const String usersUrl = '$baseUrl/api/users';
   static const String donationsUrl = '$baseUrl/api/donations';
   static const String monetbilConfigUrl = '$baseUrl/api/donations/monetbil/config';
 }

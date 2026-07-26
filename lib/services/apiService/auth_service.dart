@@ -1,14 +1,30 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:la_bonne_semence_mobile/services/apiService/api_client.dart';
 import 'package:la_bonne_semence_mobile/services/apiService/config.dart';
 
 class AuthService {
-  AuthService._();
+  AuthService._() {
+    ApiClient.instance.onRefreshToken = restoreSession;
+    ApiClient.instance.onSessionExpired = () {
+      sessionExpiredNotifier.value = true;
+    };
+  }
 
   static final AuthService instance = AuthService._();
 
   static const _refreshTokenKey = 'refresh_token';
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  
+  Future<bool>? _refreshTask;
+
+  /// Notifie quand la session est définitivement perdue (ex: refresh token expiré)
+  final ValueNotifier<bool> sessionExpiredNotifier = ValueNotifier(false);
+
+  /// Notifie quand le rôle de l'utilisateur change
+  final ValueNotifier<String?> userRoleNotifier = ValueNotifier(null);
+
+  bool get isAdmin => userRoleNotifier.value == 'admin';
 
   Future<Map<String, dynamic>> login({
     required String email,
@@ -29,9 +45,10 @@ class AuthService {
     required String password,
   }) async {
     final data = await ApiClient.instance.post(Config.registerUrl, {
-      'name': name,
+      'username': name,
       'email': email,
       'password': password,
+      'role': 'user',
     });
 
     await _storeSession(data);
@@ -40,10 +57,15 @@ class AuthService {
 
   /// Restaure une session uniquement si le refresh token sauvegardé est encore valide.
   Future<bool> restoreSession() async {
-    final refreshToken = await _storage.read(key: _refreshTokenKey);
-    if (refreshToken == null || refreshToken.isEmpty) return false;
+    if (_refreshTask != null) return _refreshTask!;
+    return _refreshTask = _doRestoreSession();
+  }
 
+  Future<bool> _doRestoreSession() async {
     try {
+      final refreshToken = await _storage.read(key: _refreshTokenKey);
+      if (refreshToken == null || refreshToken.isEmpty) return false;
+
       final data = await ApiClient.instance
           .post(Config.refreshUrl, {'refreshToken': refreshToken})
           .timeout(const Duration(seconds: 10));
@@ -54,6 +76,15 @@ class AuthService {
       }
 
       ApiClient.instance.setToken(accessToken);
+      
+      // On récupère les infos complètes de l'utilisateur (dont le rôle)
+      // Cela permet de garantir que l'interface (Drawer) sera à jour.
+      try {
+        await me();
+      } catch (e) {
+        debugPrint('Erreur lors de la récupération du profil après refresh: $e');
+      }
+
       final rotatedRefreshToken = _extractRefreshToken(data);
       if (rotatedRefreshToken != null && rotatedRefreshToken.isNotEmpty) {
         await _storage.write(key: _refreshTokenKey, value: rotatedRefreshToken);
@@ -62,6 +93,8 @@ class AuthService {
     } catch (_) {
       await _clearSession();
       return false;
+    } finally {
+      _refreshTask = null;
     }
   }
 
@@ -70,7 +103,14 @@ class AuthService {
       Config.meUrl,
       authenticated: true,
     );
-    return data == null ? null : _asMap(data);
+    final map = data == null ? null : _asMap(data);
+    if (map != null) {
+      final userData = map['user'] ?? map['data'] ?? map;
+      if (userData is Map<String, dynamic>) {
+        userRoleNotifier.value = userData['role']?.toString();
+      }
+    }
+    return map;
   }
 
   Future<void> logout() async {
@@ -95,8 +135,24 @@ class AuthService {
     }, authenticated: true);
   }
 
+  Future<Map<String, dynamic>> updateProfile({required String name}) async {
+    final data = await ApiClient.instance.patch(
+      Config.meUrl,
+      {'name': name},
+      authenticated: true,
+    );
+    return _asMap(data);
+  }
+
   Future<void> _storeSession(dynamic data) async {
     ApiClient.instance.setToken(_extractAccessToken(data));
+
+    if (data is Map<String, dynamic>) {
+      final userData = data['user'] ?? data['data'] ?? data;
+      if (userData is Map<String, dynamic>) {
+        userRoleNotifier.value = userData['role']?.toString();
+      }
+    }
 
     final refreshToken = _extractRefreshToken(data);
     if (refreshToken != null && refreshToken.isNotEmpty) {
@@ -108,6 +164,7 @@ class AuthService {
 
   Future<void> _clearSession() async {
     ApiClient.instance.clearToken();
+    userRoleNotifier.value = null;
     await _storage.delete(key: _refreshTokenKey);
   }
 
