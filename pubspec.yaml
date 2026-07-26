@@ -59,7 +59,7 @@ dev_dependencies:
   flutter_launcher_icons: ^0.13.1
 
 flutter_launcher_icons:
-  android: "launcher_icon"
+  android: true
   ios: false
   image_path: "assets/image/logo cabcs.png"
   adaptive_icon_background: "#C29F63"
@@ -93,11 +93,11 @@ flutter:
   # list giving the asset and other descriptors for the font. For
   # example:
   fonts:
-     - family: Poppins
-       fonts:
-         - asset: assets/fonts/Poppins-Black.ttf
-         - asset: assets/fonts/Poppins-Extra-Bold.ttf
-           weight: 700
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-Black.ttf
+        - asset: assets/fonts/Poppins-Extra-Bold.ttf
+          weight: 700
   #         style: italic
   #   - family: Trajan Pro
   #     fonts:
