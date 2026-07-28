@@ -19,4 +19,5 @@ class Config {
   static const String usersUrl = '$baseUrl/api/users';
   static const String donationsUrl = '$baseUrl/api/donations';
   static const String monetbilConfigUrl = '$baseUrl/api/donations/monetbil/config';
+  static const String motDuPasteurUrl = '$baseUrl/api/mot_du_pasteur';
 }

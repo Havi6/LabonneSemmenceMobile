@@ -21,22 +21,26 @@ class AppData extends ChangeNotifier {
   List<GalleryItem>? _galleryCache;
   List<ContactMessage>? _contactsCache;
   List<AppUser>? _usersCache;
+  List<MotDuPasteur>? _motDuPasteurCache;
   DateTime? _sermonsCachedAt;
   DateTime? _eventsCachedAt;
   DateTime? _galleryCachedAt;
   DateTime? _contactsCachedAt;
   DateTime? _usersCachedAt;
+  DateTime? _motDuPasteurCachedAt;
   Future<List<Sermon>>? _sermonsRequest;
   Future<List<Event>>? _eventsRequest;
   Future<List<GalleryItem>>? _galleryRequest;
   Future<List<ContactMessage>>? _contactsRequest;
   Future<List<AppUser>>? _usersRequest;
+  Future<List<MotDuPasteur>>? _motDuPasteurRequest;
 
   List<Sermon> get cachedSermons => _sermonsCache ?? const [];
   List<Event> get cachedEvents => _eventsCache ?? const [];
   List<GalleryItem> get cachedGallery => _galleryCache ?? const [];
   List<ContactMessage> get cachedContacts => _contactsCache ?? const [];
   List<AppUser> get cachedUsers => _usersCache ?? const [];
+  List<MotDuPasteur> get cachedMotDuPasteur => _motDuPasteurCache ?? const [];
 
   /// Renvoie le dernier message reçu du serveur et le réinitialise.
   static String? consumeLastServerMessage() {
@@ -133,6 +137,30 @@ class AppData extends ChangeNotifier {
     return _usersRequest ??= _loadUsers();
   }
 
+  static Future<List<MotDuPasteur>> fetchMotDuPasteur({
+    bool forceRefresh = false,
+    bool authenticated = false,
+  }) =>
+      instance._fetchMotDuPasteur(
+        forceRefresh: forceRefresh,
+        authenticated: authenticated,
+      );
+
+  Future<List<MotDuPasteur>> _fetchMotDuPasteur({
+    bool forceRefresh = false,
+    bool authenticated = false,
+  }) {
+    if (!forceRefresh && _motDuPasteurCache != null) {
+      if (!_isFresh(_motDuPasteurCachedAt)) {
+        _loadMotDuPasteur(authenticated: authenticated);
+      }
+      return Future.value(_motDuPasteurCache!);
+    }
+    return _motDuPasteurRequest ??= _loadMotDuPasteur(
+      authenticated: authenticated,
+    );
+  }
+
   static void clearCache() => instance._clearCache();
 
   void _clearCache() {
@@ -141,11 +169,13 @@ class AppData extends ChangeNotifier {
     _galleryCache = null;
     _contactsCache = null;
     _usersCache = null;
+    _motDuPasteurCache = null;
     _sermonsCachedAt = null;
     _eventsCachedAt = null;
     _galleryCachedAt = null;
     _contactsCachedAt = null;
     _usersCachedAt = null;
+    _motDuPasteurCachedAt = null;
     notifyListeners();
   }
 
@@ -315,6 +345,62 @@ class AppData extends ChangeNotifier {
     _usersCachedAt = DateTime.now();
     notifyListeners();
     _loadUsers();
+  }
+
+  static Future<MotDuPasteur> createMotDuPasteur(MotDuPasteur mot) =>
+      instance._createMotDuPasteur(mot);
+
+  Future<MotDuPasteur> _createMotDuPasteur(MotDuPasteur mot) async {
+    final data = await ApiClient.instance.post(
+      Config.motDuPasteurUrl,
+      mot.toJson(),
+      authenticated: true,
+    );
+    final created = MotDuPasteur.fromJson(_readEntity(data));
+    if (_motDuPasteurCache != null) {
+      _motDuPasteurCache = [created, ..._motDuPasteurCache!];
+      notifyListeners();
+    }
+    _loadMotDuPasteur(authenticated: true);
+    return created;
+  }
+
+  static Future<MotDuPasteur> updateMotDuPasteur(MotDuPasteur mot) =>
+      instance._updateMotDuPasteur(mot);
+
+  Future<MotDuPasteur> _updateMotDuPasteur(MotDuPasteur mot) async {
+    final id = _requiredId(mot.id, 'ce message du pasteur');
+    final data = await ApiClient.instance.put(
+      '${Config.motDuPasteurUrl}/${Uri.encodeComponent(id)}',
+      mot.toJson(),
+      authenticated: true,
+    );
+    final updated = MotDuPasteur.fromJson(_readEntity(data));
+    if (_motDuPasteurCache != null) {
+      final index = _motDuPasteurCache!.indexWhere((m) => m.id == mot.id);
+      if (index != -1) {
+        _motDuPasteurCache![index] = updated;
+        notifyListeners();
+      }
+    }
+    _loadMotDuPasteur(authenticated: true);
+    return updated;
+  }
+
+  static Future<void> deleteMotDuPasteur(String id) =>
+      instance._deleteMotDuPasteur(id);
+
+  Future<void> _deleteMotDuPasteur(String id) async {
+    final data = await ApiClient.instance.delete(
+      '${Config.motDuPasteurUrl}/${Uri.encodeComponent(id)}',
+      authenticated: true,
+    );
+    _readEntity(data);
+    _motDuPasteurCache =
+        _motDuPasteurCache?.where((item) => item.id != id).toList();
+    _motDuPasteurCachedAt = DateTime.now();
+    notifyListeners();
+    _loadMotDuPasteur(authenticated: true);
   }
 
   static Future<GalleryItem> uploadGalleryItem({
@@ -517,6 +603,24 @@ class AppData extends ChangeNotifier {
       return users;
     } finally {
       _usersRequest = null;
+    }
+  }
+
+  Future<List<MotDuPasteur>> _loadMotDuPasteur({
+    bool authenticated = false,
+  }) async {
+    try {
+      final data = await ApiClient.instance.get(
+        Config.motDuPasteurUrl,
+        authenticated: authenticated,
+      );
+      final list = _readList(data).map(MotDuPasteur.fromJson).toList();
+      _motDuPasteurCache = list;
+      _motDuPasteurCachedAt = DateTime.now();
+      notifyListeners();
+      return list;
+    } finally {
+      _motDuPasteurRequest = null;
     }
   }
 

@@ -135,10 +135,13 @@ class AuthService {
     }, authenticated: true);
   }
 
-  Future<Map<String, dynamic>> updateProfile({required String name}) async {
+  Future<Map<String, dynamic>> updateUsername({
+    required String id,
+    required String username,
+  }) async {
     final data = await ApiClient.instance.patch(
-      Config.meUrl,
-      {'name': name},
+      '${Config.usersUrl}/$id/username',
+      {'username': username},
       authenticated: true,
     );
     return _asMap(data);

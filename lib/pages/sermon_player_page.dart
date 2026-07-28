@@ -4,6 +4,7 @@ import 'package:la_bonne_semence_mobile/services/app_data.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_video_progress_bar/audio_video_progress_bar.dart';
 import 'package:la_bonne_semence_mobile/services/responsive_utils.dart';
+import 'package:la_bonne_semence_mobile/services/download_service.dart';
 import 'package:rxdart/rxdart.dart';
 
 class SermonPlayerPage extends StatefulWidget {
@@ -108,15 +109,6 @@ class _SermonPlayerPageState extends State<SermonPlayerPage> {
           ),
           onPressed: () => Navigator.pop(context),
         ),
-        actions: [
-          IconButton(
-            icon: Icon(
-              Icons.more_vert,
-              color: isDark ? Colors.white : Colors.black,
-            ),
-            onPressed: () {},
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
@@ -132,11 +124,11 @@ class _SermonPlayerPageState extends State<SermonPlayerPage> {
                 height: imageHeight,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(30),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primary.withOpacity(0.2),
+                      color: AppColors.primary.withValues(alpha: 0.2),
                       blurRadius: 20,
                       offset: const Offset(0, 10),
                     ),
@@ -144,10 +136,35 @@ class _SermonPlayerPageState extends State<SermonPlayerPage> {
                 ),
                 child: Hero(
                   tag: 'sermon_icon_${_currentSermon.title}',
-                  child: Icon(
-                    Icons.church_outlined,
-                    size: imageHeight * 0.5,
-                    color: AppColors.primary,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(30),
+                    child: _currentSermon.imageUrl.isNotEmpty
+                        ? Image.network(
+                            _currentSermon.imageUrl,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Center(
+                                child: CircularProgressIndicator(
+                                  value: loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                      : null,
+                                  color: AppColors.primary,
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.church_outlined,
+                              size: imageHeight * 0.5,
+                              color: AppColors.primary,
+                            ),
+                          )
+                        : Icon(
+                            Icons.church_outlined,
+                            size: imageHeight * 0.5,
+                            color: AppColors.primary,
+                          ),
                   ),
                 ),
               ),
@@ -181,15 +198,61 @@ class _SermonPlayerPageState extends State<SermonPlayerPage> {
                       ],
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.favorite_border,
-                      color: AppColors.primary,
+                  ListenableBuilder(
+                      listenable: DownloadService.instance,
+                      builder: (context, _) {
+                        final isDownloaded =
+                            DownloadService.instance.isDownloaded(_currentSermon.id);
+                        final progress = DownloadService.instance
+                            .getProgress(_currentSermon.id ?? '');
+
+                        if (progress > 0 && progress < 1) {
+                          return SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              value: progress,
+                              strokeWidth: 2,
+                              color: AppColors.primary,
+                            ),
+                          );
+                        }
+
+                        return IconButton(
+                          icon: Icon(
+                            isDownloaded ? Icons.download_done : Icons.download,
+                            color: isDownloaded ? Colors.green : AppColors.primary,
+                          ),
+                          onPressed: isDownloaded
+                              ? null
+                              : () async {
+                                  try {
+                                    await DownloadService.instance
+                                        .downloadSermon(_currentSermon);
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text("Téléchargement terminé"),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+                                    }
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text("Erreur de téléchargement"),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                        );
+                      },
                     ),
-                    onPressed: () {},
-                  ),
-                ],
-              ),
+                  ],
+                ),
               const SizedBox(height: 20),
               // Progress Bar
               StreamBuilder<PositionData>(
@@ -202,8 +265,8 @@ class _SermonPlayerPageState extends State<SermonPlayerPage> {
                     total: positionData?.duration ?? Duration.zero,
                     onSeek: _audioPlayer.seek,
                     barHeight: 4,
-                    baseBarColor: AppColors.primary.withOpacity(0.2),
-                    bufferedBarColor: AppColors.primary.withOpacity(0.1),
+                    baseBarColor: AppColors.primary.withValues(alpha: 0.2),
+                    bufferedBarColor: AppColors.primary.withValues(alpha: 0.1),
                     progressBarColor: AppColors.primary,
                     thumbColor: AppColors.primary,
                     thumbRadius: 6,
@@ -217,16 +280,13 @@ class _SermonPlayerPageState extends State<SermonPlayerPage> {
               const SizedBox(height: 20),
               // Controls
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.shuffle, size: 24),
-                    onPressed: () {},
-                  ),
                   IconButton(
                     icon: Icon(Icons.skip_previous_rounded, size: controlSize),
                     onPressed: _previousSermon,
                   ),
+                  const SizedBox(width: 20),
                   StreamBuilder<PlayerState>(
                     stream: _audioPlayer.playerStateStream,
                     builder: (context, snapshot) {
@@ -298,13 +358,10 @@ class _SermonPlayerPageState extends State<SermonPlayerPage> {
                       }
                     },
                   ),
+                  const SizedBox(width: 20),
                   IconButton(
                     icon: Icon(Icons.skip_next_rounded, size: controlSize),
                     onPressed: _nextSermon,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.repeat, size: 24),
-                    onPressed: () {},
                   ),
                 ],
               ),
@@ -315,7 +372,7 @@ class _SermonPlayerPageState extends State<SermonPlayerPage> {
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: isDark
-                      ? AppColors.surfaceLight.withOpacity(0.1)
+                      ? AppColors.surfaceLight.withValues(alpha: 0.1)
                       : Colors.grey[100],
                   borderRadius: BorderRadius.circular(20),
                 ),

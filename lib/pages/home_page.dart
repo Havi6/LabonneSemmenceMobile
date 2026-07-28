@@ -6,6 +6,7 @@ import 'package:la_bonne_semence_mobile/widget/image_viewer.dart';
 import 'package:la_bonne_semence_mobile/widget/empty_state_placeholder.dart';
 import 'package:la_bonne_semence_mobile/pages/event_detail_page.dart';
 import 'package:la_bonne_semence_mobile/pages/sermon_player_page.dart';
+import 'package:la_bonne_semence_mobile/pages/mot_du_pasteur_detail_page.dart';
 import 'package:la_bonne_semence_mobile/services/app_data.dart';
 import 'package:la_bonne_semence_mobile/services/responsive_utils.dart';
 
@@ -33,6 +34,7 @@ class _HomePageState extends State<HomePage> {
         AppData.fetchSermons(),
         AppData.fetchEvents(),
         AppData.fetchGallery(),
+        AppData.fetchMotDuPasteur(),
       ]);
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -47,6 +49,7 @@ class _HomePageState extends State<HomePage> {
     final recentSermons = appData.cachedSermons.take(5).toList();
     final recentEvents = appData.cachedEvents.take(5).toList();
     final recentGallery = appData.cachedGallery.take(5).toList();
+    final recentMotDuPasteur = appData.cachedMotDuPasteur.take(5).toList();
 
     return Scaffold(
       body: SingleChildScrollView(
@@ -77,6 +80,20 @@ class _HomePageState extends State<HomePage> {
                     1,
                   ),
                   _buildSermonsCarousel(isDark, recentSermons),
+                ],
+              ),
+            ),
+
+            SizedBox(height: context.verticalSpacing),
+
+            // Section Mot du Pasteur
+            RevealItem(
+              delay: const Duration(milliseconds: 500),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSectionHeader("Le Mot du Pasteur", Icons.comment, -1),
+                  _buildMotDuPasteurCarousel(isDark, recentMotDuPasteur),
                 ],
               ),
             ),
@@ -134,19 +151,140 @@ class _HomePageState extends State<HomePage> {
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ),
-          TextButton(
-            onPressed: () {
-              if (widget.onNavigate != null) {
-                widget.onNavigate!(targetIndex);
-              }
-            },
-            child: const Text(
-              "Voir tout",
-              style: TextStyle(color: AppColors.primary),
+          if (targetIndex != -1)
+            TextButton(
+              onPressed: () {
+                if (widget.onNavigate != null) {
+                  widget.onNavigate!(targetIndex);
+                }
+              },
+              child: const Text(
+                "Voir tout",
+                style: TextStyle(color: AppColors.primary),
+              ),
             ),
-          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildMotDuPasteurCarousel(
+    bool isDark,
+    List<MotDuPasteur> messages,
+  ) {
+    return SizedBox(
+      height: 180,
+      child: messages.isEmpty
+          ? const EmptyStatePlaceholder(
+              icon: Icons.comment_bank_outlined,
+              message: 'Aucun message du pasteur pour le moment.',
+              compact: true,
+            )
+          : ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: messages.length,
+              itemBuilder: (context, index) {
+                final message = messages[index];
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            MotDuPasteurDetailPage(message: message),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    width: context.responsiveValue(
+                      mobile: context.percentWidth(75).clamp(240.0, 320.0),
+                      tablet: 300,
+                      desktop: 350,
+                    ),
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? AppColors.surfaceLight.withValues(alpha: 0.1)
+                          : AppColors.primary.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                message.label,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const Spacer(),
+                            Icon(
+                              Icons.format_quote,
+                              color: AppColors.primary.withValues(alpha: 0.3),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          message.title,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const Spacer(),
+                        Row(
+                          children: [
+                            const CircleAvatar(
+                              radius: 12,
+                              backgroundColor: AppColors.primary,
+                              child: Icon(
+                                Icons.person,
+                                size: 14,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                message.author,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
     );
   }
 
@@ -184,12 +322,12 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: isDark
-                    ? AppColors.surfaceLight.withOpacity(0.2)
+                    ? AppColors.surfaceLight.withValues(alpha: 0.2)
                     : Colors.white,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 10,
                     offset: const Offset(0, 5),
                   ),
@@ -291,7 +429,7 @@ class _HomePageState extends State<HomePage> {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                    colors: [Colors.transparent, Colors.black.withValues(alpha: 0.8)],
                   ),
                 ),
                 padding: const EdgeInsets.all(12),
@@ -354,7 +492,7 @@ class _HomePageState extends State<HomePage> {
                 context,
                 MaterialPageRoute(
                   builder: (context) =>
-                      ImageViewer(imageUrl: photo.url, title: photo.title),
+                      ImageViewer(item: photo),
                 ),
               );
             },
@@ -386,7 +524,7 @@ class _HomePageState extends State<HomePage> {
                             end: Alignment.bottomCenter,
                             colors: [
                               Colors.transparent,
-                              Colors.black.withOpacity(0.6),
+                              Colors.black.withValues(alpha: 0.6),
                             ],
                           ),
                         ),

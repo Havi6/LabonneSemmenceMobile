@@ -12,6 +12,8 @@ class Sermon {
   final String audioUrl;
   final String imageUrl;
   final String imageCaption;
+  final bool autoDelete;
+  final int? deleteAfterDays;
   bool isPlaying;
 
   Sermon({
@@ -25,6 +27,8 @@ class Sermon {
     required this.audioUrl,
     this.imageUrl = '',
     this.imageCaption = '',
+    this.autoDelete = false,
+    this.deleteAfterDays,
     this.isPlaying = false,
   });
 
@@ -40,6 +44,8 @@ class Sermon {
     audioUrl: normalizeUrl(readString(json, ['chemin', 'audioUrl', 'audio', 'fileUrl', 'url'])) ?? '',
     imageUrl: normalizeUrl(readString(json, ['image_url', 'imageUrl', 'image'])) ?? '',
     imageCaption: readString(json, ['legende', 'caption', 'imageCaption', 'legend']) ?? '',
+    autoDelete: readBool(json, ['auto_delete', 'autoDelete']) ?? false,
+    deleteAfterDays: readInt(json, ['delete_after_days', 'deleteAfterDays']),
   );
 
   Map<String, dynamic> toJson() => {
@@ -52,6 +58,8 @@ class Sermon {
     'categorie': duration,
     'image_url': imageUrl,
     'legende': imageCaption,
+    'auto_delete': autoDelete,
+    'delete_after_days': deleteAfterDays,
   };
 }
 
@@ -65,6 +73,8 @@ class Event {
   final String imageUrl;
   final String label;
   final String? videoUrl;
+  final bool autoDelete;
+  final int? deleteAfterDays;
 
   Event({
     this.id,
@@ -76,6 +86,8 @@ class Event {
     required this.imageUrl,
     required this.label,
     this.videoUrl,
+    this.autoDelete = false,
+    this.deleteAfterDays,
   });
 
   factory Event.fromJson(Map<String, dynamic> json) => Event(
@@ -97,6 +109,8 @@ class Event {
         fileUrl(readString(json, ['id', '_id'])),
     label: readString(json, ['categorie', 'label', 'category', 'type']) ?? '',
     videoUrl: readString(json, ['videoUrl', 'video', 'streamUrl']),
+    autoDelete: readBool(json, ['auto_delete', 'autoDelete']) ?? false,
+    deleteAfterDays: readInt(json, ['delete_after_days', 'deleteAfterDays']),
   );
 
   Map<String, dynamic> toJson() => {
@@ -108,6 +122,8 @@ class Event {
     if (imageUrl.isNotEmpty) 'image_url': imageUrl,
     'categorie': label,
     if (videoUrl != null && videoUrl!.isNotEmpty) 'videoUrl': videoUrl,
+    'auto_delete': autoDelete,
+    'delete_after_days': deleteAfterDays,
   };
 }
 
@@ -126,6 +142,57 @@ class GalleryItem {
     title:
         readString(json, ['legende', 'caption', 'legend', 'title', 'name', 'filename', 'originalName']) ?? '',
   );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'url': url,
+    'title': title,
+  };
+}
+
+class MotDuPasteur {
+  final String? id;
+  final String title;
+  final String content;
+  final String label;
+  final String author;
+  final DateTime? createdAt;
+  final bool autoDelete;
+  final int? deleteAfterDays;
+
+  MotDuPasteur({
+    this.id,
+    required this.title,
+    required this.content,
+    required this.label,
+    required this.author,
+    this.createdAt,
+    this.autoDelete = false,
+    this.deleteAfterDays,
+  });
+
+  factory MotDuPasteur.fromJson(Map<String, dynamic> json) {
+    final dateStr = readString(json, ['createdAt', 'date', 'publishedAt']);
+    return MotDuPasteur(
+      id: readString(json, ['id', '_id']),
+      title: readString(json, ['title', 'titre']) ?? '',
+      content: readString(json, ['content', 'contenu']) ?? '',
+      label: readString(json, ['label', 'libelle']) ?? '',
+      author: readString(json, ['author', 'auteur']) ?? '',
+      createdAt: dateStr != null ? DateTime.tryParse(dateStr) : null,
+      autoDelete: readBool(json, ['auto_delete', 'autoDelete']) ?? false,
+      deleteAfterDays: readInt(json, ['delete_after_days', 'deleteAfterDays']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'title': title,
+        'content': content,
+        'label': label,
+        'author': author,
+        'auto_delete': autoDelete,
+        'delete_after_days': deleteAfterDays,
+      };
 }
 
 String? readString(Map<String, dynamic> json, List<String> keys) {
@@ -147,6 +214,31 @@ String? readString(Map<String, dynamic> json, List<String> keys) {
     }
     final text = value.toString();
     if (text.isNotEmpty) return text;
+  }
+  return null;
+}
+
+bool? readBool(Map<String, dynamic> json, List<String> keys) {
+  for (final key in keys) {
+    final value = json[key];
+    if (value == null) continue;
+    if (value is bool) return value;
+    if (value is String) {
+      if (value.toLowerCase() == 'true') return true;
+      if (value.toLowerCase() == 'false') return false;
+    }
+    if (value is num) return value != 0;
+  }
+  return null;
+}
+
+int? readInt(Map<String, dynamic> json, List<String> keys) {
+  for (final key in keys) {
+    final value = json[key];
+    if (value == null) continue;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
   }
   return null;
 }

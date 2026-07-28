@@ -26,12 +26,11 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
   late TabController _tabController;
   bool _isLoading = true;
   bool _isActionInProgress = false;
-  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 7, vsync: this);
     _loadData();
   }
 
@@ -44,20 +43,30 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
   Future<void> _loadData({bool refresh = false}) async {
     setState(() {
       _isLoading = true;
-      _error = null;
     });
+
+    final tasks = <Future<void>>[
+      _safeFetch(() => AppData.fetchSermons(forceRefresh: refresh, authenticated: true), 'Sermons'),
+      _safeFetch(() => AppData.fetchEvents(forceRefresh: refresh, authenticated: true), 'Événements'),
+      _safeFetch(() => AppData.fetchGallery(forceRefresh: refresh, authenticated: true), 'Galerie'),
+      _safeFetch(() => AppData.fetchContacts(forceRefresh: refresh), 'Contacts'),
+      _safeFetch(() => AppData.fetchUsers(forceRefresh: refresh), 'Membres'),
+      _safeFetch(() => AppData.fetchMotDuPasteur(forceRefresh: refresh, authenticated: true), 'Mots du Pasteur'),
+    ];
+
+    await Future.wait(tasks);
+
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _safeFetch(Future<dynamic> Function() fetch, String label) async {
     try {
-      await Future.wait([
-        AppData.fetchSermons(forceRefresh: refresh, authenticated: true),
-        AppData.fetchEvents(forceRefresh: refresh, authenticated: true),
-        AppData.fetchGallery(forceRefresh: refresh, authenticated: true),
-        AppData.fetchContacts(forceRefresh: refresh),
-        AppData.fetchUsers(forceRefresh: refresh),
-      ]);
+      await fetch();
     } catch (error) {
-      if (mounted) _error = _message(error);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      debugPrint('Error fetching $label: $error');
+      if (mounted) {
+        _showMessage('Erreur lors du chargement de ($label): ${_message(error)}', error: true);
+      }
     }
   }
 
@@ -98,6 +107,13 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     await _runAction(() async {
       await AppData.deleteUser(user.id!);
     }, 'Utilisateur supprimé.');
+  }
+
+  Future<void> _deleteMotDuPasteur(MotDuPasteur mot) async {
+    if (mot.id == null || !await _confirm('Supprimer ce message ?')) return;
+    await _runAction(() async {
+      await AppData.deleteMotDuPasteur(mot.id!);
+    }, 'Message supprimé.');
   }
 
   Future<bool> _confirm(String message) async =>
@@ -167,6 +183,7 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     final gallery = appData.cachedGallery;
     final contacts = appData.cachedContacts;
     final users = appData.cachedUsers;
+    final motDuPasteur = appData.cachedMotDuPasteur;
 
     return Scaffold(
       appBar: AppBar(
@@ -193,6 +210,7 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
             Tab(icon: Icon(Icons.people_outline), text: 'Membres'),
             Tab(icon: Icon(Icons.event_note_outlined), text: 'Événements'),
             Tab(icon: Icon(Icons.mic_none_outlined), text: 'Sermons'),
+            Tab(icon: Icon(Icons.comment_outlined), text: 'Mots du Pasteur'),
             Tab(icon: Icon(Icons.photo_library_outlined), text: 'Galerie'),
             Tab(icon: Icon(Icons.contact_mail_outlined), text: 'Contacts'),
           ],
@@ -207,12 +225,10 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
               minHeight: 2,
             ),
           Expanded(
-            child: (_isLoading && sermons.isEmpty)
+            child: (_isLoading && sermons.isEmpty && events.isEmpty && users.isEmpty)
                 ? const Center(
                     child: CircularProgressIndicator(color: AppColors.primary),
                   )
-                : _error != null
-                ? _buildError()
                 : TabBarView(
                     controller: _tabController,
                     children: [
@@ -222,10 +238,12 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
                         gallery.length,
                         contacts.length,
                         users.length,
+                        motDuPasteur.length,
                       ),
                       _buildMembers(users),
                       _buildEvents(events),
                       _buildSermons(sermons),
+                      _buildMotDuPasteur(motDuPasteur),
                       _buildGallery(gallery),
                       _buildContacts(contacts),
                     ],
@@ -236,36 +254,13 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     );
   }
 
-  Widget _buildError() => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.cloud_off_outlined,
-            size: 52,
-            color: AppColors.primary,
-          ),
-          const SizedBox(height: 12),
-          Text(_error!, textAlign: TextAlign.center),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: () => _loadData(refresh: true),
-            icon: const Icon(Icons.refresh),
-            label: const Text('Réessayer'),
-          ),
-        ],
-      ),
-    ),
-  );
-
   Widget _buildDashboard(
     int sermonsCount,
     int eventsCount,
     int galleryCount,
     int contactsCount,
     int usersCount,
+    int motDuPasteurCount,
   ) => SingleChildScrollView(
     padding: EdgeInsets.all(context.pageHorizontalPadding),
     child: Column(
@@ -282,7 +277,7 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
           crossAxisCount: context.responsiveValue(
             mobile: context.screenWidth < 360 ? 1 : 2,
             tablet: 3,
-            desktop: 5,
+            desktop: 4,
           ),
           crossAxisSpacing: 15,
           mainAxisSpacing: 15,
@@ -303,6 +298,12 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
               eventsCount,
               Icons.event,
               Colors.green,
+            ),
+            _buildStatCard(
+              'Mot du Pasteur',
+              motDuPasteurCount,
+              Icons.comment,
+              Colors.blueGrey,
             ),
             _buildStatCard(
               'Photos',
@@ -388,6 +389,36 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
       },
     ),
   );
+
+  Widget _buildMotDuPasteur(List<MotDuPasteur> list) => _resourceLayout(
+        label: 'Ajouter un message',
+        icon: Icons.add,
+        onAdd: () => _showMotDuPasteurEditor(),
+        isEmpty: list.isEmpty,
+        empty: 'Aucun message du pasteur disponible.',
+        content: ListView.separated(
+          padding: EdgeInsets.all(context.pageHorizontalPadding),
+          itemCount: list.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          itemBuilder: (_, index) {
+            final item = list[index];
+            return Card(
+              child: ListTile(
+                leading: const Icon(
+                  Icons.comment_outlined,
+                  color: AppColors.primary,
+                ),
+                title: Text(item.title),
+                subtitle: Text(item.author),
+                trailing: _editDeleteMenu(
+                  onEdit: () => _showMotDuPasteurEditor(item),
+                  onDelete: () => _deleteMotDuPasteur(item),
+                ),
+              ),
+            );
+          },
+        ),
+      );
 
   Widget _buildGallery(List<GalleryItem> gallery) => _resourceLayout(
     label: 'Téléverser une photo',
@@ -572,6 +603,8 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
       'verse': existing?.verse ?? '',
       'audioUrl': existing?.audioUrl ?? '',
       'imageUrl': existing?.imageUrl ?? '',
+      'autoDelete': existing?.autoDelete.toString() ?? 'false',
+      'deleteAfterDays': existing?.deleteAfterDays?.toString() ?? '',
     };
     final result = await _showEditor(
       title: existing == null ? 'Nouveau sermon' : 'Modifier le sermon',
@@ -584,12 +617,17 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
         ('date', 'Date', false),
         ('audioUrl', 'Fichier audio', true),
         ('imageUrl', 'Image de couverture', false),
+        ('autoDelete', 'Suppression automatique', false),
+        ('deleteAfterDays', 'Délai (jours)', false),
       ],
       fileFields: const {
         'audioUrl': _FileInput.audio,
         'imageUrl': _FileInput.image,
       },
       dateFields: const {'date'},
+      switchFields: const {'autoDelete'},
+      numericFields: const {'deleteAfterDays'},
+      conditionalFields: const {'deleteAfterDays': 'autoDelete'},
     );
     if (result == null) return;
     await _runAction(
@@ -628,12 +666,58 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
           audioUrl: audioUrl,
           imageUrl: imageUrl,
           imageCaption: '',
+          autoDelete: result.values['autoDelete'] == 'true',
+          deleteAfterDays: int.tryParse(result.values['deleteAfterDays'] ?? ''),
         );
         await (existing == null
             ? AppData.createSermon(sermon)
             : AppData.updateSermon(sermon));
       },
       existing == null ? 'Sermon créé.' : 'Sermon mis à jour.',
+    );
+  }
+
+  Future<void> _showMotDuPasteurEditor([MotDuPasteur? existing]) async {
+    final values = <String, String>{
+      'title': existing?.title ?? '',
+      'content': existing?.content ?? '',
+      'label': existing?.label ?? '',
+      'author': existing?.author ?? '',
+      'autoDelete': existing?.autoDelete.toString() ?? 'false',
+      'deleteAfterDays': existing?.deleteAfterDays?.toString() ?? '',
+    };
+    final result = await _showEditor(
+      title: existing == null ? 'Nouveau message' : 'Modifier le message',
+      values: values,
+      fields: const [
+        ('title', 'Titre', true),
+        ('content', 'Contenu', true),
+        ('label', 'Libellé', true),
+        ('author', 'Auteur', true),
+        ('autoDelete', 'Suppression automatique', false),
+        ('deleteAfterDays', 'Délai (jours)', false),
+      ],
+      switchFields: const {'autoDelete'},
+      numericFields: const {'deleteAfterDays'},
+      conditionalFields: const {'deleteAfterDays': 'autoDelete'},
+    );
+    if (result == null) return;
+    await _runAction(
+      () async {
+        final mot = MotDuPasteur(
+          id: existing?.id,
+          title: result.values['title']!,
+          content: result.values['content']!,
+          label: result.values['label']!,
+          author: result.values['author']!,
+          autoDelete: result.values['autoDelete'] == 'true',
+          deleteAfterDays: int.tryParse(result.values['deleteAfterDays'] ?? ''),
+        );
+        await (existing == null
+            ? AppData.createMotDuPasteur(mot)
+            : AppData.updateMotDuPasteur(mot));
+      },
+      existing == null ? 'Message créé.' : 'Message mis à jour.',
     );
   }
 
@@ -646,6 +730,8 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
       'location': existing?.location ?? '',
       'imageUrl': existing?.imageUrl ?? '',
       'label': existing?.label ?? '',
+      'autoDelete': existing?.autoDelete.toString() ?? 'false',
+      'deleteAfterDays': existing?.deleteAfterDays?.toString() ?? '',
     };
     final result = await _showEditor(
       title: existing == null ? 'Nouvel événement' : 'Modifier l’événement',
@@ -658,6 +744,8 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
         ('label', 'Catégorie', false),
         ('description', 'Description', false),
         ('imageUrl', 'Image', false),
+        ('autoDelete', 'Suppression automatique', false),
+        ('deleteAfterDays', 'Délai (jours)', false),
       ],
       fileFields: const {'imageUrl': _FileInput.image},
       dateFields: const {'date'},
@@ -665,6 +753,9 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
       dropdownFields: const {
         'label': ['Jeunesse', 'Culte', 'Prière', 'Social'],
       },
+      switchFields: const {'autoDelete'},
+      numericFields: const {'deleteAfterDays'},
+      conditionalFields: const {'deleteAfterDays': 'autoDelete'},
     );
     if (result == null) return;
     await _runAction(
@@ -688,6 +779,8 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
           location: result.values['location']!,
           imageUrl: imageUrl,
           label: result.values['label']!,
+          autoDelete: result.values['autoDelete'] == 'true',
+          deleteAfterDays: int.tryParse(result.values['deleteAfterDays'] ?? ''),
         );
         await (existing == null
             ? AppData.createEvent(event)
@@ -744,6 +837,9 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
     Set<String> dateFields = const {},
     Set<String> timeFields = const {},
     Map<String, List<String>> dropdownFields = const {},
+    Set<String> switchFields = const {},
+    Set<String> numericFields = const {},
+    Map<String, String> conditionalFields = const {},
   }) async {
     final formKey = GlobalKey<FormState>();
     final controllers = {
@@ -769,158 +865,178 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     for (final field in fields)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: dropdownFields.containsKey(field.$1)
-                            ? DropdownButtonFormField<String>(
-                                initialValue: dropdownFields[field.$1]!.contains(
-                                  controllers[field.$1]!.text,
-                                )
-                                    ? controllers[field.$1]!.text
-                                    : null,
-                                decoration: InputDecoration(
-                                  labelText: field.$2,
-                                  border: const OutlineInputBorder(),
-                                ),
-                                items:
-                                    dropdownFields[field.$1]!
-                                        .map(
-                                          (opt) => DropdownMenuItem(
-                                            value: opt,
-                                            child: Text(opt),
-                                          ),
-                                        )
-                                        .toList(),
-                                onChanged: (val) {
-                                  if (val != null) {
+                      if (!conditionalFields.containsKey(field.$1) ||
+                          controllers[conditionalFields[field.$1]]!.text == 'true')
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: switchFields.contains(field.$1)
+                              ? SwitchListTile(
+                                  title: Text(field.$2),
+                                  value: controllers[field.$1]!.text == 'true',
+                                  activeThumbColor: AppColors.primary,
+                                  onChanged: (val) {
                                     setDialogState(() {
-                                      controllers[field.$1]!.text = val;
+                                      controllers[field.$1]!.text = val.toString();
                                     });
-                                  }
-                                },
-                                validator:
-                                    field.$3
-                                        ? (value) =>
-                                            value == null || value.isEmpty
-                                                ? 'Champ obligatoire'
-                                                : null
-                                        : null,
-                              )
-                            : fileFields.containsKey(field.$1)
-                            ? TextFormField(
-                                controller: controllers[field.$1],
-                                readOnly: true,
-                                decoration: InputDecoration(
-                                  labelText: field.$2,
-                                  border: const OutlineInputBorder(),
-                                  prefixIcon: Icon(
-                                    fileFields[field.$1] == _FileInput.image
-                                        ? Icons.image_outlined
-                                        : Icons.audio_file_outlined,
-                                  ),
-                                  suffixIcon: IconButton(
-                                    icon: const Icon(Icons.attach_file),
-                                    tooltip: 'Choisir un fichier',
-                                    onPressed: () async {
-                                      final file = await _pickEditorFile(
-                                        fileFields[field.$1]!,
-                                      );
-                                      if (file == null) return;
-                                      setDialogState(() {
-                                        selectedFiles[field.$1] = file;
-                                        controllers[field.$1]!.text = file.name;
-                                      });
-                                    },
-                                  ),
-                                ),
-                                validator: field.$3
-                                    ? (value) =>
-                                        (value == null || value.isEmpty) &&
-                                                !selectedFiles.containsKey(
-                                                  field.$1,
-                                                )
-                                            ? 'Fichier obligatoire'
-                                            : null
-                                    : null,
-                              )
-                            : TextFormField(
-                                controller: controllers[field.$1],
-                                maxLines: field.$1 == 'description' ? 3 : 1,
-                                readOnly:
-                                    dateFields.contains(field.$1) ||
-                                    timeFields.contains(field.$1),
-                                decoration: InputDecoration(
-                                  labelText: field.$2,
-                                  border: const OutlineInputBorder(),
-                                  suffixIcon:
-                                      dateFields.contains(field.$1)
-                                          ? IconButton(
-                                              icon: const Icon(
-                                                Icons.calendar_today,
-                                              ),
-                                              onPressed: () async {
-                                                final date = await showDatePicker(
-                                                  context: context,
-                                                  initialDate: DateTime.now(),
-                                                  firstDate: DateTime(2000),
-                                                  lastDate: DateTime(2100),
-                                                );
-                                                if (date != null) {
-                                                  controllers[field.$1]!.text =
-                                                      "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
-                                                }
-                                              },
-                                            )
-                                          : timeFields.contains(field.$1)
-                                          ? IconButton(
-                                              icon: const Icon(Icons.access_time),
-                                              onPressed: () async {
-                                                final time = await showTimePicker(
-                                                  context: context,
-                                                  initialTime: TimeOfDay.now(),
-                                                );
-                                                if (time != null) {
-                                                  controllers[field.$1]!.text =
-                                                      "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}";
-                                                }
-                                              },
-                                            )
+                                  },
+                                )
+                              : dropdownFields.containsKey(field.$1)
+                                  ? DropdownButtonFormField<String>(
+                                      initialValue: dropdownFields[field.$1]!
+                                              .contains(controllers[field.$1]!.text)
+                                          ? controllers[field.$1]!.text
                                           : null,
-                                ),
-                                validator: field.$3
-                                    ? (value) =>
-                                        value == null || value.trim().isEmpty
-                                            ? 'Champ obligatoire'
-                                            : null
-                                    : null,
-                                onTap:
-                                    dateFields.contains(field.$1)
-                                        ? () async {
-                                            final date = await showDatePicker(
-                                              context: context,
-                                              initialDate: DateTime.now(),
-                                              firstDate: DateTime(2000),
-                                              lastDate: DateTime(2100),
-                                            );
-                                            if (date != null) {
-                                              controllers[field.$1]!.text =
-                                                  "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
-                                            }
-                                          }
-                                        : timeFields.contains(field.$1)
-                                        ? () async {
-                                            final time = await showTimePicker(
-                                              context: context,
-                                              initialTime: TimeOfDay.now(),
-                                            );
-                                            if (time != null) {
-                                              controllers[field.$1]!.text =
-                                                  "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}";
-                                            }
-                                          }
-                                        : null,
-                              ),
-                      ),
+                                      decoration: InputDecoration(
+                                        labelText: field.$2,
+                                        border: const OutlineInputBorder(),
+                                      ),
+                                      items: dropdownFields[field.$1]!
+                                          .map(
+                                            (opt) => DropdownMenuItem(
+                                              value: opt,
+                                              child: Text(opt),
+                                            ),
+                                          )
+                                          .toList(),
+                                      onChanged: (val) {
+                                        if (val != null) {
+                                          setDialogState(() {
+                                            controllers[field.$1]!.text = val;
+                                          });
+                                        }
+                                      },
+                                      validator: field.$3
+                                          ? (value) => value == null || value.isEmpty
+                                              ? 'Champ obligatoire'
+                                              : null
+                                          : null,
+                                    )
+                                  : fileFields.containsKey(field.$1)
+                                      ? TextFormField(
+                                          controller: controllers[field.$1],
+                                          readOnly: true,
+                                          decoration: InputDecoration(
+                                            labelText: field.$2,
+                                            border: const OutlineInputBorder(),
+                                            prefixIcon: Icon(
+                                              fileFields[field.$1] == _FileInput.image
+                                                  ? Icons.image_outlined
+                                                  : Icons.audio_file_outlined,
+                                            ),
+                                            suffixIcon: IconButton(
+                                              icon: const Icon(Icons.attach_file),
+                                              tooltip: 'Choisir un fichier',
+                                              onPressed: () async {
+                                                final file = await _pickEditorFile(
+                                                  fileFields[field.$1]!,
+                                                );
+                                                if (file == null) return;
+                                                setDialogState(() {
+                                                  selectedFiles[field.$1] = file;
+                                                  controllers[field.$1]!.text =
+                                                      file.name;
+                                                });
+                                              },
+                                            ),
+                                          ),
+                                          validator: field.$3
+                                              ? (value) => (value == null ||
+                                                          value.isEmpty) &&
+                                                      !selectedFiles.containsKey(
+                                                          field.$1)
+                                                  ? 'Fichier obligatoire'
+                                                  : null
+                                              : null,
+                                        )
+                                      : TextFormField(
+                                          controller: controllers[field.$1],
+                                          maxLines: field.$1 == 'description' ||
+                                                  field.$1 == 'content'
+                                              ? 3
+                                              : 1,
+                                          keyboardType:
+                                              numericFields.contains(field.$1)
+                                                  ? TextInputType.number
+                                                  : TextInputType.text,
+                                          readOnly: dateFields.contains(field.$1) ||
+                                              timeFields.contains(field.$1),
+                                          decoration: InputDecoration(
+                                            labelText: field.$2,
+                                            border: const OutlineInputBorder(),
+                                            suffixIcon: dateFields.contains(field.$1)
+                                                ? IconButton(
+                                                    icon: const Icon(
+                                                      Icons.calendar_today,
+                                                    ),
+                                                    onPressed: () async {
+                                                      final date =
+                                                          await showDatePicker(
+                                                        context: context,
+                                                        initialDate: DateTime.now(),
+                                                        firstDate: DateTime(2000),
+                                                        lastDate: DateTime(2100),
+                                                      );
+                                                      if (date != null) {
+                                                        controllers[field.$1]!
+                                                                .text =
+                                                            "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+                                                      }
+                                                    },
+                                                  )
+                                                : timeFields.contains(field.$1)
+                                                    ? IconButton(
+                                                        icon: const Icon(
+                                                            Icons.access_time),
+                                                        onPressed: () async {
+                                                          final time =
+                                                              await showTimePicker(
+                                                            context: context,
+                                                            initialTime:
+                                                                TimeOfDay.now(),
+                                                          );
+                                                          if (time != null) {
+                                                            controllers[field.$1]!
+                                                                    .text =
+                                                                "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}";
+                                                          }
+                                                        },
+                                                      )
+                                                    : null,
+                                          ),
+                                          validator: field.$3
+                                              ? (value) => value == null ||
+                                                      value.trim().isEmpty
+                                                  ? 'Champ obligatoire'
+                                                  : null
+                                              : null,
+                                          onTap: dateFields.contains(field.$1)
+                                              ? () async {
+                                                  final date = await showDatePicker(
+                                                    context: context,
+                                                    initialDate: DateTime.now(),
+                                                    firstDate: DateTime(2000),
+                                                    lastDate: DateTime(2100),
+                                                  );
+                                                  if (date != null) {
+                                                    controllers[field.$1]!.text =
+                                                        "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+                                                  }
+                                                }
+                                              : timeFields.contains(field.$1)
+                                                  ? () async {
+                                                      final time =
+                                                          await showTimePicker(
+                                                        context: context,
+                                                        initialTime: TimeOfDay.now(),
+                                                      );
+                                                      if (time != null) {
+                                                        controllers[field.$1]!.text =
+                                                            "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}";
+                                                      }
+                                                    }
+                                                  : null,
+                                        ),
+                        ),
                   ],
                 ),
               ),

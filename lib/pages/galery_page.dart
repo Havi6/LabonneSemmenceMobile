@@ -140,8 +140,7 @@ class _GaleryPageState extends State<GaleryPage> {
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => ImageViewer(
-                                        imageUrl: galleryItems[index].url,
-                                        title: galleryItems[index].title,
+                                        item: galleryItems[index],
                                       ),
                                     ),
                                   );

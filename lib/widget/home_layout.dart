@@ -10,11 +10,13 @@ import 'package:la_bonne_semence_mobile/pages/home_page.dart';
 import 'package:la_bonne_semence_mobile/pages/login_page.dart';
 import 'package:la_bonne_semence_mobile/pages/sermons_page.dart';
 import 'package:la_bonne_semence_mobile/pages/setting_page.dart';
+import 'package:la_bonne_semence_mobile/pages/downloads_page.dart';
 import 'package:la_bonne_semence_mobile/services/apiService/auth_service.dart';
 import 'package:la_bonne_semence_mobile/services/responsive_utils.dart';
 import 'package:la_bonne_semence_mobile/theme/app_theme.dart';
 import 'package:provider/provider.dart';
 import 'package:salomon_bottom_bar/salomon_bottom_bar.dart';
+import 'package:la_bonne_semence_mobile/services/download_service.dart';
 
 import '../theme/app_colors.dart';
 
@@ -39,6 +41,12 @@ class _HomeLayoutState extends State<HomeLayout> {
       selectedIcon: Icons.admin_panel_settings,
       label: 'Admin',
       page: const AdminPage(),
+    ),
+    (
+      icon: Icons.download_for_offline_outlined,
+      selectedIcon: Icons.download_for_offline,
+      label: 'Mes téléchargements',
+      page: const DownloadsPage(),
     ),
     (
       icon: Icons.account_circle_outlined,
@@ -77,6 +85,7 @@ class _HomeLayoutState extends State<HomeLayout> {
   @override
   void initState() {
     super.initState();
+    DownloadService.instance.init();
     _bottomPages = [
       HomePage(onNavigate: _onNavigate),
       const SermonsPage(),

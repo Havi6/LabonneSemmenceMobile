@@ -5,6 +5,7 @@ import 'package:la_bonne_semence_mobile/services/apiService/api_client.dart';
 import 'package:la_bonne_semence_mobile/services/apiService/auth_service.dart';
 import 'package:la_bonne_semence_mobile/services/responsive_utils.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 
 class Profile extends StatefulWidget {
@@ -63,9 +64,9 @@ class _ProfileState extends State<Profile> {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDark = themeProvider.isDarkMode;
     final name = _readUser('name') ?? _readUser('username') ?? 'Utilisateur';
-    final email = _readUser('email') ?? 'Non renseigne';
-    final createdAt =
-        _readUser('createdAt') ?? _readUser('created_at') ?? 'Non renseigne';
+    final email = _readUser('email') ?? 'Non renseigné';
+    final rawDate = _readUser('createdAt') ?? _readUser('created_at');
+    final createdAt = _formatDate(rawDate);
 
     return Scaffold(
       body: SafeArea(
@@ -418,8 +419,12 @@ class _ProfileState extends State<Profile> {
                       if (formKey.currentState!.validate()) {
                         setDialogState(() => isUpdating = true);
                         try {
-                          await AuthService.instance.updateProfile(
-                            name: nameController.text.trim(),
+                          final userId = _readUser('id') ?? _readUser('_id');
+                          if (userId == null) throw Exception("ID utilisateur introuvable");
+                          
+                          await AuthService.instance.updateUsername(
+                            id: userId,
+                            username: nameController.text.trim(),
                           );
                           if (context.mounted) {
                             Navigator.pop(context);
@@ -489,5 +494,17 @@ class _ProfileState extends State<Profile> {
   String? _readUser(String key) {
     final value = _user?[key];
     return value?.toString();
+  }
+
+  String _formatDate(String? rawDate) {
+    if (rawDate == null || rawDate.isEmpty || rawDate == 'null') {
+      return 'Non renseigné';
+    }
+    try {
+      final dateTime = DateTime.parse(rawDate);
+      return DateFormat('dd/MM/yyyy').format(dateTime);
+    } catch (_) {
+      return rawDate;
+    }
   }
 }

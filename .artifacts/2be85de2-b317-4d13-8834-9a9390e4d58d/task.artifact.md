@@ -1,0 +1,4 @@
+- [x] Ajouter `toJson()` à `GalleryItem` dans `lib/models/entities.dart`
+- [x] Mettre à jour `DownloadService` pour gérer les images de la galerie
+- [x] Ajouter un bouton de téléchargement dans `lib/widget/image_viewer.dart`
+- [x] Mettre à jour `DownloadsPage` pour afficher les photos téléchargées
