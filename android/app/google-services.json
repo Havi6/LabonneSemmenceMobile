@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "229032106608",
+    "project_id": "la-bonne-semence",
+    "storage_bucket": "la-bonne-semence.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:229032106608:android:b601f711d671061cd2b2b5",
+        "android_client_info": {
+          "package_name": "cd.havi.la_bonne_semence_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA3sGjaqQNCR3iPSepC28CTaYQ2ZR-0glc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

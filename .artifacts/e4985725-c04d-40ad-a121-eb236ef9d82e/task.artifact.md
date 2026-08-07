@@ -1,0 +1,4 @@
+- [ ] Ajouter `id` dans `Sermon.toJson()`
+- [ ] Ajouter `id` dans `Event.toJson()`
+- [ ] Ajouter `id` dans `DailyDevotion.toJson()`
+- [ ] Vérifier la cohérence globale des modèles

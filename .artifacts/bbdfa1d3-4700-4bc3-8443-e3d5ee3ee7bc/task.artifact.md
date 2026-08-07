@@ -1,0 +1,4 @@
+- [ ] Add `RECORD_AUDIO` permission to `AndroidManifest.xml`
+- [ ] Set `minSdk = 21` in `build.gradle.kts`
+- [ ] Run `flutter clean`
+- [ ] Run `flutter pub get`

@@ -1,0 +1,5 @@
+- [ ] Sécuriser l'initialisation des notifications dans `notification_service.dart`
+    - [ ] Ajouter un bloc try-catch autour de `subscribeToTopic`
+    - [ ] Ajouter un bloc try-catch autour de `getToken`
+    - [ ] Améliorer les logs de debug
+- [ ] Vérifier la cohérence avec `main.dart`
