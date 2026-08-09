@@ -12,7 +12,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 
     <application
-        android:label="la_bonne_semence_mobile"
+        android:label="La Bonne Semence"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
