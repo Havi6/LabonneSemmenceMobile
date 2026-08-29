@@ -1,0 +1,7 @@
+- [ ] Mise à jour du modèle `DailyDevotion` dans `entities.dart`
+- [ ] Amélioration de `SmartImage` pour les placeholders contextuels
+- [ ] Mise à jour de l'interface Admin pour l'upload d'images (Dévotions & Sermons)
+- [ ] Refonte de la carte Dévotion sur `home_page.dart`
+- [ ] Mise à jour de `sermons_page.dart` pour afficher les miniatures
+- [ ] Ajout de l'en-tête image dans `daily_devotion_detail_page.dart`
+- [ ] Vérification finale
