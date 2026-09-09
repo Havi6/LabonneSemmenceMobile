@@ -1,4 +1,4 @@
-# la_bonne_semence_mobile
+# La Bonne Semence Mobile
 
 version mobile de l'app la bonne semence
 
